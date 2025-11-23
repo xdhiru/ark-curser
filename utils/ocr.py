@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 import yaml
 from utils.adb import adb_screenshot
+from utils.logger import logger
 from difflib import SequenceMatcher
 
 
@@ -31,12 +32,12 @@ def read_timer_from_region(x1, y1, x2, y2):
     texts = easyocr_reader.readtext(crop, detail=0, allowlist='0123456789:')
     
     if not texts:
-        print("No OCR result")
+        logger.warning("No OCR result for timer region")
         return None
     
     # Combine OCR results into a single string (in case the colon is misread or split)
     raw_text = "".join(texts)
-    print(f"Raw OCR text: {raw_text}")
+    logger.debug(f"Raw OCR timer text: {raw_text}")
     
     # Strip out any non-digit characters (just in case OCR added weird characters)
     cleaned_text = re.sub(r'[^0-9]', '', raw_text)
@@ -47,12 +48,12 @@ def read_timer_from_region(x1, y1, x2, y2):
         m = int(cleaned_text[2:4])  # Middle two digits are minutes
         s = int(cleaned_text[4:])  # Last two digits are seconds
     else:
-        print(f"Error: Invalid OCR result (expected 6 digits, got {len(cleaned_text)})")
+        logger.error(f"Invalid OCR result for timer (expected 6 digits, got {len(cleaned_text)})")
         return None
     
     # Calculate total time in seconds
     timer_seconds = h * 3600 + m * 60 + s
-    print(f"OCR result: {timer_seconds} seconds")
+    logger.debug(f"Timer parsed: {timer_seconds} seconds ({h:02d}h {m:02d}m {s:02d}s)")
     return timer_seconds
 
 
@@ -68,7 +69,7 @@ def read_text_from_region(x1, y1, x2, y2):
     texts = easyocr_reader.readtext(crop, detail=0)
     
     if not texts:
-        print("No OCR result")
+        logger.warning("No OCR result for text region")
         return None
     
     # Combine OCR results into a single string
@@ -76,8 +77,7 @@ def read_text_from_region(x1, y1, x2, y2):
     # Keep only A–Z, a–z, 0–9
     alnum_text = re.sub(r'[^A-Za-z0-9]', '', raw_text)
 
-    print(f"Final OCR alphanumeric text: {alnum_text}")
-
+    logger.debug(f"OCR text extracted: {alnum_text}")
     return alnum_text
 
 

@@ -1,6 +1,7 @@
 from tasks.navigation import *
 from utils.ocr import *
 from utils.adb import *
+from utils.logger import logger
 from utils.time_helper import get_ist_time_and_remaining
 import time
 import heapq  # To maintain a sorted job queue based on the timer
@@ -11,8 +12,7 @@ def handle_trading_posts():
         
     for match in tpMatchesList:
         TradingPost(match["x"],match["y"])
-        print("1 trading post handled, sleeping 10 seconds")
-        print("returning back to base")
+        logger.info("Trading post handled, returning to base and sleeping 5 seconds")
         return_back_to_base_left_side()
         time.sleep(5)
 
@@ -53,12 +53,12 @@ class TradingPost:
     def enter_TP_workers(self):
         time.sleep(1)
         if not find_template("order-efficiency-screen"):
-            print("Not inside a Trading post, can't open TP workers")
+            logger.warning(f"TP {self.id}: Not inside trading post, cannot open TP workers")
             return False
             return_back_to_base_left_side()
             self.enter_TP()
         adb_tap(485,965)
-        print("Entered TP workers successfully!")
+        logger.debug(f"TP {self.id}: Entered TP workers successfully")
         time.sleep(1)
         return True
 
@@ -67,20 +67,17 @@ class TradingPost:
         if not find_template("check-if-inside-tp"):
             self.enter_TP()
         order_timer_seconds=self.scan_timer()
-        print(f"Seconds OCRed for TP order:{order_timer_seconds}")
+        logger.debug(f"TP {self.id}: Scanned timer - {order_timer_seconds} seconds")
         self.execution_timestamp=time.time()+order_timer_seconds
-        print(f"Set execution timestamp:{self.execution_timestamp}")
+        logger.debug(f"TP {self.id}: Set execution timestamp to {self.execution_timestamp}")
 
     def add_to_curse(self):
         heapq.heappush(self.__class__.curse_uncurse_queue, (self.execution_timestamp-40, self, True))  # Push to curse, tuple (execution_timestamp, TradingPost object, do_curse_flag)
-        print("added to curse hepq.heappush",(self.execution_timestamp-40, self, True))
-        # old code before reducung from -100 to -50 to -40 
-        # heapq.heappush(self.__class__.curse_uncurse_queue, (self.execution_timestamp-100, self, True))  # Push to curse, tuple (execution_timestamp, TradingPost object, do_curse_flag)
-        # print("added to curse hepq.heappush",(self.execution_timestamp-100, self, True))
+        logger.debug(f"TP {self.id}: Added curse task to queue (execution: {self.execution_timestamp-40})")
 
     def add_to_uncurse(self):
         heapq.heappush(self.__class__.curse_uncurse_queue, (self.execution_timestamp+5, self, False)) # Push to uncurse, tuple (execution_timestamp, TradingPost object, do_curse_flag)
-        print("added to uncurse hepq.heappush",(self.execution_timestamp+5, self, False))
+        logger.debug(f"TP {self.id}: Added uncurse task to queue (execution: {self.execution_timestamp+5})")
 
     def collect_orders(self):
         time.sleep(3)
@@ -93,7 +90,7 @@ class TradingPost:
         worker2=read_text_from_region(630,910,825,950)
         worker3=read_text_from_region(845,485,1040,525)
         self.productivity_workers=[worker1,worker2,worker3]
-        print("Saved TP productivity workers:",self.productivity_workers)
+        logger.debug(f"TP {self.id}: Saved productivity workers: {self.productivity_workers}")
 
     def select_tp_worker(self, tp_worker, max_slow_swipe_left_count=20, reset_to_left_swipe_count=5):
         click_template("worker-list-sort-by-trust")
@@ -194,24 +191,12 @@ class TradingPost:
 
     def curse(self):
         """Performs a curse task, needs to reach the base left side beforehand"""
-        print(f"Performing cursing for TradingPost {self.id} at x={self.x}, y={self.y}")
-        #
-        #
-        #
+        logger.info(f"TP {self.id}: Performing curse task at ({self.x}, {self.y})")
+        
         # Curse code goes here
         self.enter_TP()
         self.enter_TP_workers()
         time.sleep(2)
-        
-        # if read_text_from_region(970,160,1040,240)=="3":
-        #     print("Found 3 workers in the TP workers list")
-        #     tp_assigned_workers_count=3
-        # elif read_text_from_region(760,580,820,660)=="2":
-        #     print("Found 2 workers in the TP workers list")
-        #     tp_assigned_workers_count=2
-        # else:
-        #     print("Couldn't find neither 3 nor 2 workers in the tp. Halting curse task!")
-        #     return False
         
         self.save_tp_productivity_workers()
         self.deselect_all_tp_workers()
@@ -219,43 +204,24 @@ class TradingPost:
         self.confirm_tp_workers()
         self.is_currently_cursed=True
 
-        #
-        #
-        #
-        #
-        #
-        #
         self.update_execution_timestamp() # Calculate new time after assigned curse prov teq
         self.add_to_uncurse() # Add an uncurse task for this timestamp
         return_back_to_base_left_side()
+        logger.debug(f"TP {self.id}: Curse task completed")
         
 
     def uncurse(self):
         """Performs a uncurse task"""
-        print(f"Performing uncursing for TradingPost {self.id} at x={self.x}, y={self.y}")
-        #
-        #
-        #
+        logger.info(f"TP {self.id}: Performing uncurse task at ({self.x}, {self.y})")
+        
         # unCurse code goes here
         self.enter_TP()
         time.sleep(1)
         if not find_template("order-efficiency-screen"):
-            print("Not inside a Trading post, can't open TP workers, trying to enter TP again")
+            logger.warning(f"TP {self.id}: Not inside trading post, retrying entry")
             self.enter_TP()
         self.enter_TP_workers()
         time.sleep(2)
-        
-        # if read_text_from_region(970,160,1040,240)=="3":
-        #     print("Found 3 workers in the TP workers list")
-        #     tp_assigned_workers_count=3
-        # elif read_text_from_region(760,580,820,660)=="2":
-        #     print("Found 2 workers in the TP workers list")
-        #     tp_assigned_workers_count=2
-        # else:
-        #     print("Couldn't find neither 3 nor 2 workers in the tp. Halting uncurse task!")
-        #     return False
-        # if not len(self.productivity_workers)==tp_assigned_workers_count:
-        #     print("Halting uncurse task as len(self.productivity_workers) is not equal to tp_assigned_workers_count")
         
         self.deselect_all_tp_workers()
         for tp_worker in self.productivity_workers:
@@ -263,15 +229,11 @@ class TradingPost:
         self.confirm_tp_workers()
         self.is_currently_cursed=False
         self.productivity_workers=[]
-        #
-        #
-        #
-        #
-        #
-        #
+        
         self.update_execution_timestamp() # Calculate new time after unassigned prov teq
         self.add_to_curse()
         return_back_to_base_left_side()
+        logger.debug(f"TP {self.id}: Uncurse task completed")
         
         
     # Class-level job queue
@@ -324,10 +286,11 @@ class TradingPost:
         CURSE_EXECUTION_BUFFER = 30  # 60 seconds - Should be >= POLL_INTERVAL
         CURSE_UNCURSE_CONFLICT_THRESHOLD = 90  # 90 seconds - Independent, can be any value
         
+        logger.info("Cursing protocol initiated")
         while True:
             try:
                 if not cls.curse_uncurse_queue:
-                    print("Queue empty, checking again in 60s...")
+                    logger.debug("Task queue empty, checking again in 60s")
                     time.sleep(60)
                     continue
                 
@@ -337,8 +300,8 @@ class TradingPost:
 
                 if time_left <= CURSE_EXECUTION_BUFFER:
                     # Execute task
-                    task_info = cls.curse_uncurse_queue[0]
-                    print(f"Performing task: {task_info}")
+                    task_type = "CURSE" if curse_flag else "UNCURSE"
+                    logger.info(f"Executing {task_type} task for TP {trading_post.id}")
                     heapq.heappop(cls.curse_uncurse_queue)
                     
                     try:
@@ -355,11 +318,11 @@ class TradingPost:
                                     task_exec_time > execution_time and  # Curse task is AFTER uncurse
                                     task_exec_time - execution_time <= CURSE_UNCURSE_CONFLICT_THRESHOLD):
                                     should_delay = True
-                                    print(f"Found conflicting curse task {task_exec_time} too close to uncurse {execution_time}")
+                                    logger.debug(f"Found conflicting curse task too close to uncurse, rescheduling")
                                     break
                             
                             if should_delay:
-                                print("Delaying uncurse due to closely scheduled curse task")
+                                logger.debug("Rescheduling uncurse due to close curse task")
                                 # Reschedule uncurse to happen after the curse task
                                 new_time = current_time + CURSE_UNCURSE_CONFLICT_THRESHOLD + 5
                                 heapq.heappush(cls.curse_uncurse_queue, (new_time, trading_post, curse_flag))
@@ -367,13 +330,13 @@ class TradingPost:
                                 # Sleep until actual execution time for uncurse
                                 sleep_time = max(0, execution_time - current_time)
                                 if sleep_time > 0:
-                                    print(f"Sleeping {sleep_time:.1f}s for uncurse task")
+                                    logger.debug(f"Sleeping {sleep_time:.1f}s before uncurse")
                                     time.sleep(sleep_time)
                                 reach_base_left_side()
                                 trading_post.uncurse()
                                 
                     except Exception as e:
-                        print(f"Error performing task: {e}")
+                        logger.error(f"Error performing task for TP {trading_post.id}: {e}", exc_info=True)
                         # Optionally reschedule failed task with backoff
                     
                     continue
@@ -382,7 +345,7 @@ class TradingPost:
                     # Monitoring phase
                     sleep_time = min(POLL_INTERVAL, max(1, time_left - CURSE_EXECUTION_BUFFER))
                     IST_time, remaining_str = get_ist_time_and_remaining(execution_time)
-                    print(f"Monitoring - Task at {IST_time} (in {remaining_str}), sleeping for {sleep_time}s")
+                    logger.debug(f"Monitoring - Next task at {IST_time} (in {remaining_str}), sleeping {sleep_time}s")
                     time.sleep(sleep_time)
                     
                 else:
@@ -392,9 +355,9 @@ class TradingPost:
                     sleep_time = min(sleep_time, sleep_until_early_wakeup)
                     
                     IST_time, remaining_str = get_ist_time_and_remaining(execution_time)
-                    print(f"Deep sleep - Task at {IST_time} (in {remaining_str}), sleeping for {sleep_time}s")
+                    logger.debug(f"Deep sleep - Task at {IST_time} (in {remaining_str}), sleeping {sleep_time}s")
                     time.sleep(sleep_time)
                     
             except Exception as e:
-                print(f"Unexpected error: {e}")
+                logger.error(f"Unexpected error in cursing protocol: {e}", exc_info=True)
                 time.sleep(60)

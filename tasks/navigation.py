@@ -1,6 +1,7 @@
 from utils.adb import adb_connect, adb_is_device_ready, adb_screenshot, adb_tap, swipe_left, swipe_right
 from utils.vision import find_template
 from utils.ocr import find_text_coordinates
+from utils.logger import logger
 import time
 
 def click_template(template_name, threshold=0.8):
@@ -10,16 +11,15 @@ def click_template(template_name, threshold=0.8):
     # If found → Click
     
     if matches:
-        print(matches)
         x, y = matches[0]["x"], matches[0]["y"]
-        print(f"[+] Found '{template_name}' at {x}, {y}")
+        logger.info(f"Found template '{template_name}' at ({x}, {y}), tapping")
         adb_tap(x, y)
         return True
         # else:
-        #     print(f"[+] Found multiple '{template_name}'")
+        #     logger.debug(f"Found multiple instances of '{template_name}'")
         #     handle_multiple_matches(template_name, matches)
     else:
-        print(f"[-] Template '{template_name}' not found.")
+        logger.warning(f"Template '{template_name}' not found")
         return False
 
 def find_and_click_text(input_text):

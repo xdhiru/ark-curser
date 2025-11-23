@@ -2,6 +2,7 @@ import subprocess
 import yaml
 import time
 from pathlib import Path
+from utils.logger import logger
 
 # Load settings.yaml
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "settings.yaml"
@@ -54,7 +55,7 @@ def adb_tap(x, y=None):
     - adb_tap([(100, 200), (300, 400)])  # Multiple coordinates => (halts)
     """
     if x is None:
-        print("Error: No coordinates provided (x is None)")
+        logger.error("No coordinates provided (x is None)")
         return False
     
     if y is not None:
@@ -62,18 +63,17 @@ def adb_tap(x, y=None):
     else:
         # Otherwise, x should be a list with at least one coordinate tuple
         if not x or not isinstance(x, list) or not isinstance(x[0], tuple):
-            print("Error: When using single parameter, must provide list of coordinate tuples")
+            logger.error("When using single parameter, must provide list of coordinate tuples")
             return False
         
         # Check if multiple coordinates exist
         if len(x) > 1:
-            print(f"Error: adb_tap found {len(x)} coordinates. Halting.")
-            print(f"Coordinates: {x}")
+            logger.error(f"adb_tap found {len(x)} coordinates. Halting. Coordinates: {x}")
             return False
         
         x_coord, y_coord = x[0]  # Use first coordinate
     
-    print(f"adb tapping: {x_coord}, {y_coord}")
+    logger.debug(f"Tapping at coordinates: {x_coord}, {y_coord}")
     return adb_run([ADB_PATH, "-s", DEVICE_ID, "shell", "input", "tap", str(x_coord), str(y_coord)])
 
 def adb_swipe(x1, y1, x2, y2, duration_ms=300):
@@ -85,16 +85,17 @@ def adb_swipe(x1, y1, x2, y2, duration_ms=300):
     ])
 
 def swipe_left():
+    logger.debug("Swiping left")
     adb_swipe(1500, 535, 840, 535)
-    print("swiped left, sleeping 1sec")
     time.sleep(1)
 
 def swipe_right():
+    logger.debug("Swiping right")
     adb_swipe(840, 535, 1500, 535)
-    print("swiped right, sleeping 1sec")
     time.sleep(1)
 
 def slow_swipe_left():
+    logger.debug("Slow swiping left")
     adb_swipe(1500, 550, 1000, 550, 700)
     time.sleep(0.5)
 

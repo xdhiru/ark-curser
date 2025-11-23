@@ -3,6 +3,7 @@ import numpy as np
 from pathlib import Path
 import yaml
 from utils.adb import adb_screenshot
+from utils.logger import logger
 
 # Load settings.yaml
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "settings.yaml"
@@ -22,17 +23,18 @@ def find_template(template_name, threshold=0.8, min_distance=8):
     # Construct the template file path
     template_path = Path("Templates") / f"{template_name}.png"
     if not template_path.exists():
+        logger.error(f"Template file not found: {template_path}")
         raise FileNotFoundError(f"Template not found: {template_path}")
 
     screen = cv2.imread(SCREENSHOT_PATH, 0)
     template = cv2.imread(str(template_path), 0)
 
     if screen is None:
-        print("ERROR: Screenshot path invalid or not found:", SCREENSHOT_PATH)
+        logger.error(f"Screenshot path invalid or not found: {SCREENSHOT_PATH}")
         return []
 
     if template is None:
-        print("ERROR: Template invalid:", template_path)
+        logger.error(f"Failed to read template file: {template_path}")
         return []
 
     h, w = template.shape
@@ -66,5 +68,5 @@ def find_template(template_name, threshold=0.8, min_distance=8):
 
     # Sort final matches by confidence (best first)
     unique_matches.sort(key=lambda x: x["confidence"], reverse=True)
-    print(f"find_template '{template_name}' results:", unique_matches)
+    logger.debug(f"Template '{template_name}' found {len(unique_matches)} unique matches")
     return unique_matches
