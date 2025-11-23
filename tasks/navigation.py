@@ -26,10 +26,7 @@ def find_and_click_text(input_text):
     adb_tap(find_text_coordinates(input_text))
 
 def is_home_screen():
-    if find_template("settings-icon"):
-        return True
-    else:
-        return False
+    return bool(find_template("settings-icon"))
     
 def reach_home_screen():
     while not is_home_screen():
@@ -48,7 +45,7 @@ def return_back_to_base_left_side():
 
 
 def reach_base():
-    time.sleep(2)
+    time.sleep(1)
     if check_if_reached_base():
         return True
     reach_home_screen()
@@ -57,7 +54,6 @@ def reach_base():
     return True
     
 def check_if_reached_base():
-    time.sleep(2)
     if find_template("reached-base"):
         return True
     return False
@@ -83,9 +79,9 @@ def wait_for_template(template_name, timeout=40, threshold=0.8):
     while time.time() - start_time < timeout:
         matches = find_template(template_name, threshold)
         if matches:
-            time.sleep(1.5)
+            time.sleep(1)
             return matches[0]   # return first match
 
-        time.sleep(1.5)  # check twice per second
+        time.sleep(1)  # check twice per second
 
     return None

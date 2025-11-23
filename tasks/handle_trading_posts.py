@@ -5,6 +5,12 @@ from utils.logger import logger
 from utils.time_helper import get_ist_time_and_remaining
 import time
 import heapq  # To maintain a sorted job queue based on the timer
+import yaml
+
+# Load configuration
+with open('config/settings.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+screen_coords = config.get('screen_coordinates', {})
 
 def handle_trading_posts():
 
@@ -48,16 +54,16 @@ class TradingPost:
 
     def scan_timer(self):
         time.sleep(1)
-        return read_timer_from_region(450, 450, 1000, 600) #order timer in seconds (no delay)
+        region = screen_coords['order_timer_scan_region']
+        return read_timer_from_region(*region) #order timer in seconds (no delay)
 
     def enter_TP_workers(self):
         time.sleep(1)
         if not find_template("order-efficiency-screen"):
             logger.warning(f"TP {self.id}: Not inside trading post, cannot open TP workers")
             return False
-            return_back_to_base_left_side()
-            self.enter_TP()
-        adb_tap(485,965)
+        x, y = screen_coords['tp_workers_entry_button']
+        adb_tap(x, y)
         logger.debug(f"TP {self.id}: Entered TP workers successfully")
         time.sleep(1)
         return True
@@ -80,15 +86,18 @@ class TradingPost:
         logger.debug(f"TP {self.id}: Added uncurse task to queue (execution: {self.execution_timestamp+5})")
 
     def collect_orders(self):
-        time.sleep(3)
+        time.sleep(1.5)
         if find_template("tp-order-ready-to-deliver"):
             click_template("tp-order-ready-to-deliver")
         return
 
     def save_tp_productivity_workers(self):
-        worker1=read_text_from_region(630,485,825,525)
-        worker2=read_text_from_region(630,910,825,950)
-        worker3=read_text_from_region(845,485,1040,525)
+        r1 = screen_coords['productivity_worker_1_region']
+        r2 = screen_coords['productivity_worker_2_region']
+        r3 = screen_coords['productivity_worker_3_region']
+        worker1=read_text_from_region(*r1)
+        worker2=read_text_from_region(*r2)
+        worker3=read_text_from_region(*r3)
         self.productivity_workers=[worker1,worker2,worker3]
         logger.debug(f"TP {self.id}: Saved productivity workers: {self.productivity_workers}")
 
@@ -115,70 +124,41 @@ class TradingPost:
                 slow_swipe_left_count=0
                 for _ in range(reset_to_left_swipe_count):
                     swipe_right()
+    
+    def find_and_tap_worker(self, worker_name, timeout_swipes=25):
+        """Helper to search for and tap a worker"""
+        swipe_count = 0
+        while swipe_count < timeout_swipes:
+            worker_coords = find_text_coordinates(worker_name)
+            if worker_coords:
+                adb_tap(worker_coords)
+                logger.debug(f"TP {self.id}: Found and tapped worker '{worker_name}'")
+                return True
+            slow_swipe_left()
+            swipe_count += 1
+        logger.warning(f"TP {self.id}: Could not find worker '{worker_name}' after {timeout_swipes} swipes")
+        return False
 
     def select_tp_workers_proviso_quartz_tequila(self):
         click_template("worker-list-sort-by-trust")
         time.sleep(0.25)
         click_template("worker-list-sort-by-skill")
         time.sleep(0.25)
+        
+        # Supporter category
         click_template("operator-categories-supporter-icon")
         time.sleep(0.25)
-        while True:
-            worker_coords = find_text_coordinates("Proviso")
-            if worker_coords:
-                adb_tap(worker_coords)
-                break
-            slow_swipe_left()
+        self.find_and_tap_worker("Proviso")
+        
+        # Guard category
         time.sleep(0.25)
         click_template("operator-categories-guard-icon")
         time.sleep(0.25)
-        while True:
-            worker_coords = find_text_coordinates("Quartz")
-            if worker_coords:
-                adb_tap(worker_coords)
-                break
-            slow_swipe_left()
+        self.find_and_tap_worker("Quartz")
         time.sleep(0.25)
-        while True:
-            worker_coords = find_text_coordinates("Tequila")
-            if worker_coords:
-                adb_tap(worker_coords)
-                break
-            slow_swipe_left()
+        self.find_and_tap_worker("Tequila")
         time.sleep(0.25)
-        
-    # old code, now we using select_tp_workers_proviso_quartz_tequila()
-    # def select_tp_worker_proviso(self):
-    #     click_template("worker-list-sort-by-trust")
-    #     time.sleep(0.25)
-    #     click_template("worker-list-sort-by-skill")
-    #     time.sleep(0.25)
-    #     click_template("operator-categories-all-icon")
-    #     time.sleep(0.25)
-    #     click_template("operator-categories-supporter-icon")
-    #     time.sleep(0.25)
-    #     while True:
-    #         worker_coords = find_text_coordinates("Proviso")
-    #         if worker_coords:
-    #             adb_tap(worker_coords)
-    #             break
-    #         slow_swipe_left()
-    
-    # def select_tp_worker_tequila(self):
-    #     click_template("worker-list-sort-by-trust")
-    #     time.sleep(0.25)
-    #     click_template("worker-list-sort-by-skill")
-    #     time.sleep(0.25)
-    #     click_template("operator-categories-all-icon")
-    #     time.sleep(0.25)
-    #     click_template("operator-categories-guard-icon")
-    #     time.sleep(0.25)
-    #     while True:
-    #         worker_coords = find_text_coordinates("Tequila")
-    #         if worker_coords:
-    #             adb_tap(worker_coords)
-    #             break
-    #         slow_swipe_left()
+
 
     def deselect_all_tp_workers(self):
         click_template("tp-workers-deselect-all-button")

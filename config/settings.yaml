@@ -4,3 +4,11 @@ screenshot_path: "Screenshots/screen.png"
 template_path: "Templates/"
 device_ip: "127.0.0.1:5555"
 use_gpu: true
+
+# Screen Coordinates for various Trading Post Operations at 1080p resolution
+screen_coordinates:
+  order_timer_scan_region: [450, 450, 1000, 600]
+  tp_workers_entry_button: [485, 965]
+  productivity_worker_1_region: [630, 485, 825, 525]
+  productivity_worker_2_region: [630, 910, 825, 950]
+  productivity_worker_3_region: [845, 485, 1040, 525]
