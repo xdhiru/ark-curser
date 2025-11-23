@@ -1,0 +1,55 @@
+# Python bytecode & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# OS-specific
+Thumbs.db
+.DS_Store
+
+# Runtime artifacts (DO NOT COMMIT - these are auto-generated)
+Screenshots/screen.png
+Screenshots/screen_tmp.png
+logs/
+*.log
+
+# ADB temporary files
+.adb/
+*.apk
+
+# Temporary/backup files
+*.tmp
+*.bak
+.~*
+
+# Testing
+.pytest_cache/
+.coverage
+
+# Environment configuration (machine-specific)
+.env
+.env.local
+
+# Notes (development scratch)
+notes.txt
+
+# Batch scripts (if machine-specific, else remove)
+**/*.bat

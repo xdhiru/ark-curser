@@ -1,0 +1,6 @@
+adb_path: "C:/platform-tools/adb.exe"
+# match_threshold: 0.8
+screenshot_path: "Screenshots/screen.png"
+template_path: "Templates/"
+device_ip: "127.0.0.1:5555"
+use_gpu: true
