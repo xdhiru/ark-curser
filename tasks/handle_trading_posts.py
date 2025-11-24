@@ -79,8 +79,8 @@ class TradingPost:
         logger.info(f"TP {self.id}: Set execution timestamp to {IST_time} (in {remaining_str})")
 
     def add_to_curse(self):
-        heapq.heappush(self.__class__.curse_uncurse_queue, (self.execution_timestamp-40, self, True))  # Push to curse, tuple (execution_timestamp, TradingPost object, do_curse_flag)
-        logger.debug(f"TP {self.id}: Added curse task to queue (execution: {self.execution_timestamp-40})")
+        heapq.heappush(self.__class__.curse_uncurse_queue, (self.execution_timestamp-50, self, True))  # Push to curse, tuple (execution_timestamp, TradingPost object, do_curse_flag)
+        logger.debug(f"TP {self.id}: Added curse task to queue (execution: {self.execution_timestamp-50})")
 
     def add_to_uncurse(self):
         heapq.heappush(self.__class__.curse_uncurse_queue, (self.execution_timestamp+5, self, False)) # Push to uncurse, tuple (execution_timestamp, TradingPost object, do_curse_flag)
@@ -268,7 +268,7 @@ class TradingPost:
         EARLY_WAKEUP = 300        # 7 minutes - Must be >= MAX_SLEEP
         MAX_SLEEP = 300           # 5 minutes - Must be <= EARLY_WAKEUP  
         POLL_INTERVAL = 30        # 30 seconds - Should be <= CURSE_EXECUTION_BUFFER
-        CURSE_EXECUTION_BUFFER = 30  # 60 seconds - Should be >= POLL_INTERVAL
+        CURSE_EXECUTION_BUFFER = 40  # 60 seconds - Should be >= POLL_INTERVAL
         CURSE_UNCURSE_CONFLICT_THRESHOLD = 90  # 90 seconds - Independent, can be any value
         
         logger.info("Cursing protocol initiated")

@@ -12,7 +12,7 @@ def click_template(template_name, threshold=0.8):
     
     if matches:
         x, y = matches[0]["x"], matches[0]["y"]
-        logger.info(f"Found template '{template_name}' at ({x}, {y}), tapping")
+        logger.debug(f"Found template '{template_name}' at ({x}, {y}), tapping")
         adb_tap(x, y)
         return True
     else:
