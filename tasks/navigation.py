@@ -15,9 +15,6 @@ def click_template(template_name, threshold=0.8):
         logger.info(f"Found template '{template_name}' at ({x}, {y}), tapping")
         adb_tap(x, y)
         return True
-        # else:
-        #     logger.debug(f"Found multiple instances of '{template_name}'")
-        #     handle_multiple_matches(template_name, matches)
     else:
         logger.warning(f"Template '{template_name}' not found")
         return False

@@ -37,7 +37,7 @@ def read_timer_from_region(x1, y1, x2, y2):
     
     # Combine OCR results into a single string (in case the colon is misread or split)
     raw_text = "".join(texts)
-    logger.debug(f"Raw OCR timer text: {raw_text}")
+    logger.info(f"Raw OCR timer text: {raw_text}")
     
     # Strip out any non-digit characters (just in case OCR added weird characters)
     cleaned_text = re.sub(r'[^0-9]', '', raw_text)
@@ -53,7 +53,7 @@ def read_timer_from_region(x1, y1, x2, y2):
     
     # Calculate total time in seconds
     timer_seconds = h * 3600 + m * 60 + s
-    logger.debug(f"Timer parsed: {timer_seconds} seconds ({h:02d}h {m:02d}m {s:02d}s)")
+    logger.info(f"Timer parsed: {timer_seconds} seconds ({h:02d}h {m:02d}m {s:02d}s)")
     return timer_seconds
 
 
@@ -77,7 +77,7 @@ def read_text_from_region(x1, y1, x2, y2):
     # Keep only A–Z, a–z, 0–9
     alnum_text = re.sub(r'[^A-Za-z0-9]', '', raw_text)
 
-    logger.debug(f"OCR text extracted: {alnum_text}")
+    logger.info(f"OCR text extracted: {alnum_text}")
     return alnum_text
 
 

@@ -75,7 +75,8 @@ class TradingPost:
         order_timer_seconds=self.scan_timer()
         logger.info(f"TP {self.id}: Scanned timer - {order_timer_seconds} seconds")
         self.execution_timestamp=time.time()+order_timer_seconds
-        logger.info(f"TP {self.id}: Set execution timestamp to {self.execution_timestamp}")
+        IST_time, remaining_str = get_ist_time_and_remaining(self.execution_timestamp)
+        logger.info(f"TP {self.id}: Set execution timestamp to {IST_time} (in {remaining_str})")
 
     def add_to_curse(self):
         heapq.heappush(self.__class__.curse_uncurse_queue, (self.execution_timestamp-40, self, True))  # Push to curse, tuple (execution_timestamp, TradingPost object, do_curse_flag)
