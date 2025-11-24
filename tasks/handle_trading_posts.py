@@ -73,18 +73,18 @@ class TradingPost:
         if not find_template("check-if-inside-tp"):
             self.enter_TP()
         order_timer_seconds=self.scan_timer()
-        logger.info(f"TP {self.id}: Scanned timer - {order_timer_seconds} seconds")
+        logger.debug(f"TP {self.id}: Scanned timer - {order_timer_seconds} seconds")
         self.execution_timestamp=time.time()+order_timer_seconds
         IST_time, remaining_str = get_ist_time_and_remaining(self.execution_timestamp)
         logger.info(f"TP {self.id}: Set execution timestamp to {IST_time} (in {remaining_str})")
 
     def add_to_curse(self):
         heapq.heappush(self.__class__.curse_uncurse_queue, (self.execution_timestamp-40, self, True))  # Push to curse, tuple (execution_timestamp, TradingPost object, do_curse_flag)
-        logger.info(f"TP {self.id}: Added curse task to queue (execution: {self.execution_timestamp-40})")
+        logger.debug(f"TP {self.id}: Added curse task to queue (execution: {self.execution_timestamp-40})")
 
     def add_to_uncurse(self):
         heapq.heappush(self.__class__.curse_uncurse_queue, (self.execution_timestamp+5, self, False)) # Push to uncurse, tuple (execution_timestamp, TradingPost object, do_curse_flag)
-        logger.info(f"TP {self.id}: Added uncurse task to queue (execution: {self.execution_timestamp+5})")
+        logger.debug(f"TP {self.id}: Added uncurse task to queue (execution: {self.execution_timestamp+5})")
 
     def collect_orders(self):
         time.sleep(1.5)
