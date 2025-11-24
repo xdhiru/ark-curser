@@ -172,6 +172,7 @@ class TradingPost:
     def curse(self):
         """Performs a curse task, needs to reach the base left side beforehand"""
         logger.info(f"TP {self.id}: Performing curse task at ({self.x}, {self.y})")
+        _curse_start_epoch = time.time()
         
         # Curse code goes here
         self.enter_TP()
@@ -187,12 +188,14 @@ class TradingPost:
         self.update_execution_timestamp() # Calculate new time after assigned curse prov teq
         self.add_to_uncurse() # Add an uncurse task for this timestamp
         return_back_to_base_left_side()
-        logger.info(f"TP {self.id}: Curse task completed")
+        _curse_duration_sec = time.time() - _curse_start_epoch
+        logger.info(f"TP {self.id}: Curse task completed in {_curse_duration_sec:.1f}s")
         
 
     def uncurse(self):
         """Performs a uncurse task"""
         logger.info(f"TP {self.id}: Performing uncurse task at ({self.x}, {self.y})")
+        _uncurse_start_epoch = time.time()
         
         # unCurse code goes here
         self.enter_TP()
@@ -213,7 +216,8 @@ class TradingPost:
         self.update_execution_timestamp() # Calculate new time after unassigned prov teq
         self.add_to_curse()
         return_back_to_base_left_side()
-        logger.info(f"TP {self.id}: Uncurse task completed")
+        _uncurse_duration_sec = time.time() - _uncurse_start_epoch
+        logger.info(f"TP {self.id}: Uncurse task completed in {_uncurse_duration_sec:.1f}s")
         
         
     # Class-level job queue
