@@ -27,19 +27,25 @@ def find_and_click_text(input_text):
 
 def is_home_screen():
     return bool(find_template("settings-icon"))
+
+def navigate_back_until(check_func, timeout=40):
+    """Navigate back (click back-icon) until check_func returns True"""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if check_func():
+            return True
+        click_template("back-icon")
+        time.sleep(1)
+    logger.warning(f"navigate_back_until timeout after {timeout}s")
+    return False
     
 def reach_home_screen():
-    while not is_home_screen():
-        # wait_for_template("back-icon")
-        click_template("back-icon")
-        time.sleep(1)
-    return True
+    """Navigate back to home screen"""
+    return navigate_back_until(is_home_screen)
 
 def return_back_to_base_left_side():
-    while not check_if_reached_base():
-        # wait_for_template("back-icon")
-        click_template("back-icon")
-        time.sleep(1)
+    """Navigate back to base, then position on left side"""
+    navigate_back_until(check_if_reached_base)
     reach_base_left_side()
     return True
 
@@ -48,15 +54,15 @@ def reach_base():
     time.sleep(1)
     if check_if_reached_base():
         return True
-    reach_home_screen()
+    # Only navigate home if not already there
+    if not is_home_screen():
+        reach_home_screen()
     click_template("base-icon")
     time.sleep(5)
     return True
     
 def check_if_reached_base():
-    if find_template("reached-base"):
-        return True
-    return False
+    return bool(find_template("reached-base"))
 
 def reach_base_left_side():
     reach_base()
