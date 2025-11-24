@@ -268,8 +268,8 @@ class TradingPost:
         EARLY_WAKEUP = 300        # 7 minutes - Must be >= MAX_SLEEP
         MAX_SLEEP = 300           # 5 minutes - Must be <= EARLY_WAKEUP  
         POLL_INTERVAL = 30        # 30 seconds - Should be <= CURSE_EXECUTION_BUFFER
-        CURSE_EXECUTION_BUFFER = 30  # 60 seconds - Should be >= POLL_INTERVAL
-        CURSE_UNCURSE_CONFLICT_THRESHOLD = 150  # 90 seconds - Independent, can be any value
+        CURSE_EXECUTION_BUFFER = 45  # 60 seconds - Should be >= POLL_INTERVAL
+        CURSE_UNCURSE_CONFLICT_THRESHOLD = 185  # 90 seconds - Independent, can be any value
         
         logger.info("Cursing protocol initiated")
         while True:
