@@ -1,0 +1,32 @@
+cursingbot/
+│
+├── main.py                 # Main entry point - initializes app and runs handle_trading_posts
+├── screenshot.py           # Utility to capture screenshots manually
+├── requirements.txt        # Python dependencies (easyocr, pyyaml, opencv, etc)
+│
+├── utils/
+│   ├── adb.py              # ADB device communication (tap, swipe, screenshot)
+│   ├── vision.py           # Template matching and image detection
+│   ├── ocr.py              # OCR for timer scanning and text extraction
+│   ├── logger.py           # Centralized logging (console INFO+, file DEBUG+)
+│   ├── time_helper.py      # IST time formatting and remaining time calculation
+│   └── __pycache__/
+│
+├── tasks/
+│   ├── navigation.py       # Screen navigation (reach_home, reach_base, find_trading_posts)
+│   ├── handle_trading_posts.py  # TradingPost class and cursing protocol orchestration
+│   └── __pycache__/
+│
+├── config/
+│   ├── settings.yaml       # Screen coordinates, paths, GPU settings
+│   └── user_templates/     # User customisable template images, takes precedence over core templates (/Templates/)
+│
+├── logs/                   # Auto-generated runtime logs
+├── Screenshots/            # Screenshot storage directory
+├── Templates/              # Template storage for image matching
+│
+├── LOGGING_IMPLEMENTATION.md    # Logging system documentation
+├── LOGGING_COMPLETION.md        # Logging completion checklist
+├── LOGGING_QUICK_REF.md         # Quick reference for logger usage
+│
+└── project_structure.txt               # Project notes and structure (this file)

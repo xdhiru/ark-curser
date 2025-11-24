@@ -17,11 +17,17 @@ def find_template(template_name, threshold=0.8, min_distance=8):
     """
     Looks for a template inside the screenshot.
     template_name = file WITHOUT extension (e.g. 'ok', 'start_button')
+    Priority: config/user_templates/ (custom overrides) → Templates/ (core)
     Returns unique matches only.
     """
     adb_screenshot()
-    # Construct the template file path
-    template_path = Path("Templates") / f"{template_name}.png"
+    
+    # Check user templates first for overrides, fallback to core templates
+    user_template_path = Path("config") / "user_templates" / f"{template_name}.png"
+    core_template_path = Path("Templates") / f"{template_name}.png"
+    
+    template_path = user_template_path if user_template_path.exists() else core_template_path
+    
     if not template_path.exists():
         logger.error(f"Template file not found: {template_path}")
         raise FileNotFoundError(f"Template not found: {template_path}")
