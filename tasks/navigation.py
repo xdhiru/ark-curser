@@ -28,7 +28,7 @@ def find_and_click_text(input_text):
 def is_home_screen():
     return bool(find_template("settings-icon"))
 
-def navigate_back_until(check_func, timeout=40):
+def navigate_back_until(check_func, timeout=80):
     """Navigate back (click back-icon) until check_func returns True"""
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -41,16 +41,19 @@ def navigate_back_until(check_func, timeout=40):
     
 def reach_home_screen():
     """Navigate back to home screen"""
+    logger.info("Navigating back to home screen")
     return navigate_back_until(is_home_screen)
 
 def return_back_to_base_left_side():
     """Navigate back to base, then position on left side"""
+    logger.info("Navigating back to base (left side)")
     navigate_back_until(check_if_reached_base)
     reach_base_left_side()
     return True
 
 
 def reach_base():
+    logger.info("Navigating to base")
     time.sleep(1)
     if check_if_reached_base():
         return True
@@ -65,12 +68,14 @@ def check_if_reached_base():
     return bool(find_template("reached-base"))
 
 def reach_base_left_side():
+    logger.info("Positioning on base left side")
     reach_base()
     swipe_right()
     time.sleep(1)
     return True
 
 def find_trading_posts():
+    logger.info("Searching for trading posts")
     reach_base_left_side()
     return find_template("trading-post") #return the "matches" list of dictionaries with x,y keys
 
