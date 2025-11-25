@@ -41,14 +41,6 @@ def reach_home_screen():
     logger.info("Navigating back to home screen")
     return navigate_back_until(is_home_screen)
 
-def return_back_to_base_left_side():
-    """Navigate back to base, then position on left side"""
-    logger.info("Navigating back to base (left side)")
-    navigate_back_until(check_if_reached_base)
-    reach_base_left_side()
-    return True
-
-
 def reach_base():
     logger.info("Navigating to base")
     time.sleep(1)
@@ -65,10 +57,18 @@ def check_if_reached_base():
     return bool(find_template("reached-base"))
 
 def reach_base_left_side():
+    if not check_if_reached_base():
+        reach_base()
     logger.info("Positioning on base left side")
-    reach_base()
     swipe_right()
     time.sleep(1)
+    return True
+
+def return_back_to_base_left_side():
+    """Navigate back to base, then position on left side"""
+    logger.info("Navigating back to base (left side)")
+    navigate_back_until(check_if_reached_base)
+    reach_base_left_side()
     return True
 
 def find_trading_posts():
