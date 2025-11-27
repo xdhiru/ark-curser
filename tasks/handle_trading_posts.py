@@ -11,6 +11,7 @@ import yaml
 with open('config/settings.yaml', 'r') as f:
     config = yaml.safe_load(f)
 screen_coords = config.get('screen_coordinates', {})
+CURRENTLY_TESTING= config.get('currently_testing', False)
 
 def handle_trading_posts():
 
@@ -310,10 +311,6 @@ class TradingPost:
         # EARLY_WAKEUP >= MAX_SLEEP (to prevent oversleeping past monitoring phase)
         # POLL_INTERVAL <= CURSE_EXECUTION_BUFFER (so we poll frequently enough before execution)
         # CURSE_UNCRSE_CONFLICT_THRESHOLD can be any value (independent logic)
-        
-        # TESTING MODE
-        # # Set to True to enable testing mode with shorter sleep times
-        CURRENTLY_TESTING= config.get('currently_testing', False)
         
         EARLY_WAKEUP = 300        # 7 minutes - Must be >= MAX_SLEEP
         MAX_SLEEP = 300           # 5 minutes - Must be <= EARLY_WAKEUP  
