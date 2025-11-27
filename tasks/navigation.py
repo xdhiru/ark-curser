@@ -78,7 +78,14 @@ def return_back_to_base_left_side():
 def find_trading_posts():
     logger.info("Searching for trading posts")
     reach_base_left_side()
-    return find_template("trading-post") #return the "matches" list of dictionaries with x,y keys
+    
+    tp = find_template("trading-post")
+    if not tp:
+        logger.info(f"Base is zoomed out, repositioning.")
+        click_template("trading-post-zoomed-out-base")
+        return_back_to_base_left_side()
+        tp = find_template("trading-post")
+    return tp
 
 
 def wait_for_template(template_name, timeout=40, threshold=0.8):

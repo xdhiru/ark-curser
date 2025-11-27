@@ -48,26 +48,24 @@ class TradingPost:
         return f"TradingPost({self.id}, x={self.x}, y={self.y})"
     
     def enter_TP(self):
+        logger.info(f"TP {self.id}: Clicking TP at ({self.x}, {self.y}) to enter")
         adb_tap(self.x,self.y)
         time.sleep(1)
         click_template("tp-entry-arrow")
         time.sleep(1)
 
+    def enter_TP_workers(self):
+        time.sleep(0.5)
+        logger.info(f"TP {self.id}: Trying to enter TP workers")
+        x, y = screen_coords['tp_workers_entry_button']
+        adb_tap(x, y)
+        time.sleep(1)
+        return True
+
     def scan_timer(self):
         time.sleep(1)
         region = screen_coords['order_timer_scan_region']
         return read_timer_from_region(*region) #order timer in seconds (no delay)
-
-    def enter_TP_workers(self):
-        time.sleep(1)
-        if not find_template("order-efficiency-screen"):
-            logger.warning(f"TP {self.id}: Not inside trading post, cannot open TP workers")
-            return False
-        x, y = screen_coords['tp_workers_entry_button']
-        adb_tap(x, y)
-        logger.info(f"TP {self.id}: Entered TP workers successfully")
-        time.sleep(1)
-        return True
 
     def update_execution_timestamp(self):
         """Updates the timer and re-adds to the job queue to maintain order"""
@@ -88,7 +86,7 @@ class TradingPost:
         logger.debug(f"TP {self.id}: Added uncurse task to queue (execution: {self.execution_timestamp+5})")
 
     def collect_orders(self):
-        time.sleep(1.5)
+        time.sleep(1)
         if find_template("tp-order-ready-to-deliver"):
             click_template("tp-order-ready-to-deliver")
         return
@@ -208,20 +206,40 @@ class TradingPost:
         click_template("tp-workers-deselect-all-button")
 
     def confirm_tp_workers(self):
+        click_template("tp-workers-confirm-button")
         if find_template("tp-workers-shift-confirmation-prompt"):
             click_template("tp-workers-shift-confirmation-confirm")
-        else:
-            click_template("tp-workers-confirm-button")
+    
+    def use_drones_on_tp(self):
+        time.sleep(0.5)
+        if not find_template("order-efficiency-screen"):
+            logger.warning(f"TP {self.id}: Not inside trading post, cannot use drones, trying to enter TP")
+            reach_base_left_side()
+            self.enter_TP()
+            # logger.warning(f"TP {self.id}: Not inside trading post, cannot use drones on TP")
+            # return False
+        drones_icon=find_template("tp-use-drones-icon")
+        if not drones_icon:
+            logger.info(f"TP {self.id}: Can't find drone use icon, Drone usage halted")
+            return False
+        click_template(drones_icon)
+        time.sleep(0.25)
+        click_template("tp-use-drones-max-icon")
+        time.sleep(0.25)
+        click_template("tp-use-drones-confirm-button")
+        logger.info(f"TP {self.id}: Used drones successfully")
+        time.sleep(0.25)
+            
 
     def curse(self):
+        # Needs to be inside TP already
         """Performs a curse task, needs to reach the base left side beforehand"""
         logger.info(f"TP {self.id}: Performing curse task at ({self.x}, {self.y})")
         _curse_start_epoch = time.time()
         
         # Curse code goes here
-        self.enter_TP()
         self.enter_TP_workers()
-        time.sleep(2)
+        time.sleep(1)
         
         self.save_tp_productivity_workers()
         self.deselect_all_tp_workers()
@@ -237,18 +255,17 @@ class TradingPost:
         
 
     def uncurse(self):
+        # Needs to be inside TP already
         """Performs a uncurse task"""
         logger.info(f"TP {self.id}: Performing uncurse task at ({self.x}, {self.y})")
         _uncurse_start_epoch = time.time()
         
         # unCurse code goes here
-        self.enter_TP()
-        time.sleep(1)
         if not find_template("order-efficiency-screen"):
             logger.warning(f"TP {self.id}: Not inside trading post, retrying entry")
             self.enter_TP()
         self.enter_TP_workers()
-        time.sleep(2)
+        time.sleep(1)
         self.deselect_all_tp_workers()
         if {"Pozemka","Tuye","Jaye"}.issubset(set(self.productivity_workers)):
             self.quick_select_tp_workers_pozemka_tuye_jaye()
@@ -263,47 +280,12 @@ class TradingPost:
         
         self.update_execution_timestamp() # Calculate new time after unassigned prov teq
         self.add_to_curse()
-        return_back_to_base_left_side()
         _uncurse_duration_sec = time.time() - _uncurse_start_epoch
         logger.info(f"TP {self.id}: Uncurse task completed in {_uncurse_duration_sec:.1f}s")
         
         
     # Class-level job queue
     curse_uncurse_queue = []
-
-    # old code when the curse priority over uncurse task was not implemented, and may have flaw in sleep logic, which may miss a task by sleeping longer.
-    #
-    # @classmethod
-    # def initiate_cursing_protocol(cls):
-    #     while True:
-    #         if cls.curse_uncurse_queue:
-    #             execution_time, trading_post, curse_flag = cls.curse_uncurse_queue[0]
-    #             time_left = execution_time - time.time()
-
-    #             if time_left <= 60:
-    #                 print(f"Performing {cls.curse_uncurse_queue[0]}")
-    #                 heapq.heappop(cls.curse_uncurse_queue)
-    #                 if curse_flag:
-    #                     reach_base_left_side()
-    #                     trading_post.curse()
-    #                 else:
-    #                     time.sleep(60)  # Could this be reduced?
-    #                     reach_base_left_side()
-    #                     trading_post.uncurse()
-                    
-    #                 # Continue to next iteration immediately after operation
-    #                 continue
-    #             else:
-    #                 # Dynamic sleep based on time_left
-    #                 sleep_time = min(30, max(1, time_left - 60 - 60))  # Wake up 60 seconds early
-    #                 IST_execution_time, remaining_time_str = get_ist_time_and_remaining(execution_time)
-    #                 print(f"Next task at {IST_execution_time} in {remaining_time_str}. Sleeping for {sleep_time:.1f}s...")
-    #                 time.sleep(sleep_time)
-    #         else:
-    #             # Longer sleep when queue is empty to reduce resource usage
-    #             print("Queue is empty, sleeping for 60 seconds...")
-    #             time.sleep(60)
-
 
     @classmethod
     def initiate_cursing_protocol(cls):
@@ -336,34 +318,41 @@ class TradingPost:
                 current_time = time.time()
                 execution_time, trading_post, curse_flag = cls.curse_uncurse_queue[0]
                 time_left = execution_time - current_time
+                task_type = "CURSE" if curse_flag else "UNCURSE"
 
                 if time_left <= CURSE_EXECUTION_BUFFER:
                     # Execute task
-                    task_type = "CURSE" if curse_flag else "UNCURSE"
                     logger.info(f"Executing {task_type} task for TP {trading_post.id}")
                     heapq.heappop(cls.curse_uncurse_queue)
                     
                     try:
                         if curse_flag:
                             reach_base_left_side()
+                            trading_post.enter_TP()
                             trading_post.curse()
+                            return_back_to_base_left_side()
                         else:
                             # For uncurse, check if we should delay due to upcoming curse tasks
                             # that are scheduled very close AFTER this uncurse task
                             should_delay = False
                             for task in cls.curse_uncurse_queue:
                                 task_exec_time, _, task_curse_flag = task
-                                if (task_curse_flag and 
-                                    task_exec_time > execution_time and  # Curse task is AFTER uncurse
+                                if (task_curse_flag and # current task was uncurse and next task in curse
+                                    # task_exec_time > execution_time and  # Curse task is AFTER uncurse
                                     task_exec_time - execution_time <= CURSE_UNCURSE_CONFLICT_THRESHOLD):
                                     should_delay = True
                                     logger.info(f"Found conflicting curse task too close to uncurse, rescheduling")
                                     break
                             
                             if should_delay:
-                                logger.info("Rescheduling uncurse due to close curse task")
+                                logger.info("Using drones and rescheduling uncurse due to close curse task")
+                                # use drones on uncurse task
+                                reach_base_left_side()
+                                trading_post.enter_TP()
+                                trading_post.use_drones_on_tp()
+                                return_back_to_base_left_side()
                                 # Reschedule uncurse to happen after the curse task
-                                new_time = current_time + CURSE_UNCURSE_CONFLICT_THRESHOLD + 5
+                                new_time = current_time + task_exec_time + 20  # Uncurse recheduled to 20 seconds after completing the upcoming curse task
                                 heapq.heappush(cls.curse_uncurse_queue, (new_time, trading_post, curse_flag))
                             else:
                                 # Sleep until actual execution time for uncurse
@@ -377,7 +366,9 @@ class TradingPost:
                                     logger.info(f"Sleeping {sleep_time:.1f}s before uncurse")
                                     time.sleep(sleep_time)
                                 reach_base_left_side()
+                                trading_post.enter_TP()
                                 trading_post.uncurse()
+                                return_back_to_base_left_side()
                                 
                     except Exception as e:
                         logger.error(f"Error performing task for TP {trading_post.id}: {e}", exc_info=True)
@@ -389,7 +380,7 @@ class TradingPost:
                     # Monitoring phase
                     sleep_time = min(POLL_INTERVAL, max(1, time_left - CURSE_EXECUTION_BUFFER))
                     IST_time, remaining_str = get_ist_time_and_remaining(execution_time)
-                    logger.info(f"Monitoring - Next task at {IST_time} (in {remaining_str}), sleeping {sleep_time}s")
+                    logger.info(f"Monitoring - Next task [TP{trading_post.id}, {task_type}, {IST_time}] in {remaining_str}, sleeping {sleep_time}s")
                     time.sleep(sleep_time)
                     
                 else:
@@ -399,7 +390,7 @@ class TradingPost:
                     sleep_time = min(sleep_time, sleep_until_early_wakeup)
                     
                     IST_time, remaining_str = get_ist_time_and_remaining(execution_time)
-                    logger.info(f"Deep sleep - Task at {IST_time} (in {remaining_str}), sleeping {sleep_time}s")
+                    logger.info(f"Deep sleep - Next task [TP{trading_post.id}, {task_type}, {IST_time}] in {remaining_str}, sleeping {sleep_time}s")
                     time.sleep(sleep_time)
                     
             except Exception as e:

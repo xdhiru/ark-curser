@@ -87,21 +87,21 @@ def adb_swipe(x1, y1, x2, y2, duration_ms=300):
 def swipe_left():
     logger.debug("Swiping left")
     adb_swipe(1650, 535, 700, 535)
-    time.sleep(0.75)
+    time.sleep(0.25)
 
 def swipe_right():
     logger.debug("Swiping right")
     adb_swipe(700, 535, 1650, 535)
-    time.sleep(0.75)
+    time.sleep(0.25)
 
 def slow_swipe_left():
     logger.debug("Slow swiping left")
     adb_swipe(1500, 550, 1000, 550, 700)
-    time.sleep(0.5)
+    time.sleep(0.25)
 
 def slow_swipe_right():
     adb_swipe(1000, 550, 1500, 550, 700)
-    time.sleep(0.5)
+    time.sleep(0.25)
 
 def adb_screenshot(save_path=None):
     """Take screenshot and save it."""
