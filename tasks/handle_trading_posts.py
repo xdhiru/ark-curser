@@ -102,7 +102,7 @@ class TradingPost:
         self.productivity_workers=[worker1,worker2,worker3]
         logger.info(f"TP {self.id}: Saved productivity workers: {self.productivity_workers}")
 
-    def select_tp_worker(self, tp_worker, max_slow_swipe_left_count=20, reset_to_left_swipe_count=5):
+    def select_tp_worker_by_text_ocr(self, tp_worker, max_slow_swipe_left_count=40, reset_to_left_swipe_count=30):
         click_template("worker-list-sort-by-trust")
         time.sleep(0.25)
         click_template("worker-list-sort-by-skill")
@@ -126,38 +126,80 @@ class TradingPost:
                 for _ in range(reset_to_left_swipe_count):
                     swipe_right()
     
-    def find_and_tap_worker(self, worker_name, timeout_swipes=25):
+    def scroll_left_and_tap_worker_name_template_img(self, worker_name, timeout_swipes=25):
+        """USES IMAGE template matching"""
+        """doesn't change category"""
         """Helper to search for and tap a worker"""
         swipe_count = 0
         while swipe_count < timeout_swipes:
-            worker_coords = find_text_coordinates(worker_name)
-            if worker_coords:
-                adb_tap(worker_coords)
+            list_of_dict_of_coords = find_template(worker_name)
+            if list_of_dict_of_coords:
+                click_template(list_of_dict_of_coords)
                 logger.info(f"TP {self.id}: Found and tapped worker '{worker_name}'")
                 return True
             slow_swipe_left()
             swipe_count += 1
-        logger.warning(f"TP {self.id}: Could not find worker '{worker_name}' after {timeout_swipes} swipes")
+        logger.warning(f"TP {self.id}: Could not quick find worker '{worker_name}' after {timeout_swipes} swipes")
         return False
 
-    def select_tp_workers_proviso_quartz_tequila(self):
+    def quick_select_tp_workers_proviso_quartz_tequila(self):
         click_template("worker-list-sort-by-trust")
         time.sleep(0.25)
         click_template("worker-list-sort-by-skill")
         time.sleep(0.25)
-        
-        # Supporter category
+        # proviso
         click_template("operator-categories-supporter-icon")
         time.sleep(0.25)
-        self.find_and_tap_worker("Proviso")
-        
-        # Guard category
+        self.scroll_left_and_tap_worker_name_template_img("char-name-proviso")
+        # tequila and quartz
         time.sleep(0.25)
         click_template("operator-categories-guard-icon")
         time.sleep(0.25)
-        self.find_and_tap_worker("Quartz")
+        self.scroll_left_and_tap_worker_name_template_img("char-name-quartz")
         time.sleep(0.25)
-        self.find_and_tap_worker("Tequila")
+        self.scroll_left_and_tap_worker_name_template_img("char-name-tequila")
+        time.sleep(0.25)
+
+    def quick_select_tp_workers_pozemka_tuye_jaye(self):
+        click_template("worker-list-sort-by-trust")
+        time.sleep(0.25)
+        click_template("worker-list-sort-by-skill")
+        time.sleep(0.25)
+        # pozemka category
+        click_template("operator-categories-sniper-icon")
+        time.sleep(0.25)
+        self.scroll_left_and_tap_worker_name_template_img("char-name-pozemka")
+        # tuye
+        time.sleep(0.25)
+        click_template("operator-categories-medic-icon")
+        time.sleep(0.25)
+        self.scroll_left_and_tap_worker_name_template_img("char-name-tuye")
+        # jaye
+        time.sleep(0.25)
+        click_template("operator-categories-specialist-icon")
+        time.sleep(0.25)
+        self.scroll_left_and_tap_worker_name_template_img("char-name-jaye")
+        time.sleep(0.25)
+
+    def quick_select_tp_workers_shamare_firewhistle_kirara(self):
+        click_template("worker-list-sort-by-trust")
+        time.sleep(0.25)
+        click_template("worker-list-sort-by-skill")
+        time.sleep(0.25)
+        # shamare category
+        click_template("operator-categories-supporter-icon")
+        time.sleep(0.25)
+        self.scroll_left_and_tap_worker_name_template_img("char-name-shamare")
+        # firewhistle
+        time.sleep(0.25)
+        click_template("operator-categories-defender-icon")
+        time.sleep(0.25)
+        self.scroll_left_and_tap_worker_name_template_img("char-name-firewhistle")
+        # kirara
+        time.sleep(0.25)
+        click_template("operator-categories-specialist-icon")
+        time.sleep(0.25)
+        self.scroll_left_and_tap_worker_name_template_img("char-name-kirara")
         time.sleep(0.25)
 
 
@@ -182,7 +224,7 @@ class TradingPost:
         
         self.save_tp_productivity_workers()
         self.deselect_all_tp_workers()
-        self.select_tp_workers_proviso_quartz_tequila()
+        self.quick_select_tp_workers_proviso_quartz_tequila()
         self.confirm_tp_workers()
         self.is_currently_cursed=True
 
@@ -206,10 +248,14 @@ class TradingPost:
             self.enter_TP()
         self.enter_TP_workers()
         time.sleep(2)
-        
         self.deselect_all_tp_workers()
-        for tp_worker in self.productivity_workers:
-            self.select_tp_worker(tp_worker)
+        if {"Pozemka","Tuye","Jaye"}.issubset(set(self.productivity_workers)):
+            self.quick_select_tp_workers_pozemka_tuye_jaye()
+        elif {"Shamare","Firewhistle","Kirara"}.issubset(set(self.productivity_workers)):
+            self.quick_select_tp_workers_shamare_firewhistle_kirara()
+        else:
+            for tp_worker in self.productivity_workers:
+                self.select_tp_worker_by_text_ocr(tp_worker)
         self.confirm_tp_workers()
         self.is_currently_cursed=False
         self.productivity_workers=[]
@@ -265,11 +311,22 @@ class TradingPost:
         # POLL_INTERVAL <= CURSE_EXECUTION_BUFFER (so we poll frequently enough before execution)
         # CURSE_UNCRSE_CONFLICT_THRESHOLD can be any value (independent logic)
         
+        # TESTING MODE
+        # # Set to True to enable testing mode with shorter sleep times
+        CURRENTLY_TESTING= config.get('currently_testing', False)
+        
         EARLY_WAKEUP = 300        # 7 minutes - Must be >= MAX_SLEEP
         MAX_SLEEP = 300           # 5 minutes - Must be <= EARLY_WAKEUP  
         POLL_INTERVAL = 30        # 30 seconds - Should be <= CURSE_EXECUTION_BUFFER
         CURSE_EXECUTION_BUFFER = 45  # 60 seconds - Should be >= POLL_INTERVAL
         CURSE_UNCURSE_CONFLICT_THRESHOLD = 185  # 90 seconds - Independent, can be any value
+
+        if CURRENTLY_TESTING:
+            EARLY_WAKEUP = 30000        # 7 minutes - Must be >= MAX_SLEEP
+            MAX_SLEEP = 2          # 5 minutes - Must be <= EARLY_WAKEUP  
+            POLL_INTERVAL = 2      # 30 seconds - Should be <= CURSE_EXECUTION_BUFFER
+            CURSE_EXECUTION_BUFFER = 30000  # 60 seconds - Should be >= POLL_INTERVAL
+            CURSE_UNCURSE_CONFLICT_THRESHOLD = 185  # 90 seconds - Independent, can be any value
         
         logger.info("Cursing protocol initiated")
         while True:
@@ -314,6 +371,11 @@ class TradingPost:
                             else:
                                 # Sleep until actual execution time for uncurse
                                 sleep_time = max(0, execution_time - current_time)
+
+                                #only applicable when testing
+                                if CURRENTLY_TESTING: 
+                                    sleep_time=2
+
                                 if sleep_time > 0:
                                     logger.info(f"Sleeping {sleep_time:.1f}s before uncurse")
                                     time.sleep(sleep_time)

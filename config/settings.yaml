@@ -1,9 +1,13 @@
+currently_testing: false
+
+
 adb_path: "C:/platform-tools/adb.exe"
 # match_threshold: 0.8
 screenshot_path: "Screenshots/screen.png"
 template_path: "Templates/"
 device_ip: "127.0.0.1:5555"
 use_gpu: true
+
 
 # Screen Coordinates for various Trading Post Operations at 1080p resolution
 screen_coordinates:

@@ -21,7 +21,7 @@ def main():
 
     # reach_home_screen()
     handle_trading_posts()
-
+    
 
 if __name__ == "__main__":
     main()

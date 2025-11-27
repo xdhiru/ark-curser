@@ -86,13 +86,13 @@ def adb_swipe(x1, y1, x2, y2, duration_ms=300):
 
 def swipe_left():
     logger.debug("Swiping left")
-    adb_swipe(1500, 535, 840, 535)
-    time.sleep(1)
+    adb_swipe(1650, 535, 700, 535)
+    time.sleep(0.75)
 
 def swipe_right():
     logger.debug("Swiping right")
-    adb_swipe(840, 535, 1500, 535)
-    time.sleep(1)
+    adb_swipe(700, 535, 1650, 535)
+    time.sleep(0.75)
 
 def slow_swipe_left():
     logger.debug("Slow swiping left")

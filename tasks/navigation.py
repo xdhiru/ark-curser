@@ -6,8 +6,12 @@ import time
 
 def click_template(template_name, threshold=0.8):
     # Find the template
-    matches = find_template(template_name, threshold)
-
+    if isinstance(template_name, str):
+        matches = find_template(template_name, threshold)
+    elif isinstance(template_name, list):
+        matches = template_name
+    else:
+        raise ValueError("in click_template, template_name must be either a string of template name or list of dict of coordinates")
     # If found → Click
     
     if matches:
@@ -61,7 +65,7 @@ def reach_base_left_side():
         reach_base()
     logger.info("Positioning on base left side")
     swipe_right()
-    time.sleep(1)
+    time.sleep(0.5)
     return True
 
 def return_back_to_base_left_side():
