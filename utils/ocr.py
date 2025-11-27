@@ -1,145 +1,167 @@
+
 import easyocr
 import cv2
 import re
 from pathlib import Path
+from typing import Optional, List, Tuple
+from difflib import SequenceMatcher
 import yaml
 from utils.adb import adb_screenshot
 from utils.logger import logger
-from difflib import SequenceMatcher
 
-
-
-# Load settings.yaml
+# Load configuration
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "settings.yaml"
 
 with open(CONFIG_PATH, "r") as f:
-    cfg = yaml.safe_load(f)
+    _ocr_config = yaml.safe_load(f)
 
-SCREENSHOT_PATH = cfg.get("screenshot_path")
-USE_GPU = cfg.get("use_gpu", False)
+SCREENSHOT_PATH = _ocr_config["screenshot_path"]
+USE_GPU = _ocr_config.get("use_gpu", False)
 
-easyocr_reader = easyocr.Reader(['en'], gpu=USE_GPU)
+# Initialize EasyOCR reader once at module level
+_easyocr_reader = easyocr.Reader(['en'], gpu=USE_GPU)
 
-def read_timer_from_region(x1, y1, x2, y2):
-    # Read the image
+
+def _load_screenshot_region(x1: int, y1: int, x2: int, y2: int):
+    """Helper to load and crop screenshot region"""
     adb_screenshot()
     img = cv2.imread(SCREENSHOT_PATH)
+    if img is None:
+        logger.error(f"Failed to load screenshot from {SCREENSHOT_PATH}")
+        return None
+    return img[y1:y2, x1:x2]
 
-    # crop region
-    crop = img[y1:y2, x1:x2]
+
+def read_timer_from_region(x1: int, y1: int, x2: int, y2: int) -> Optional[int]:
+    """
+    Read timer from screen region and convert to seconds.
+    Expects format: HHMMSS (e.g., "012345" = 1h 23m 45s)
     
-    # OCR numbers + colon from the whole image
-    texts = easyocr_reader.readtext(crop, detail=0, allowlist='0123456789:')
+    Returns:
+        int: Total seconds, or None if parsing fails
+    """
+    crop = _load_screenshot_region(x1, y1, x2, y2)
+    if crop is None:
+        return None
+    
+    # OCR with digits and colon only
+    texts = _easyocr_reader.readtext(crop, detail=0, allowlist='0123456789:')
     
     if not texts:
         logger.warning("No OCR result for timer region")
         return None
     
-    # Combine OCR results into a single string (in case the colon is misread or split)
+    # Combine and clean OCR results
     raw_text = "".join(texts)
     logger.info(f"Raw OCR timer text: {raw_text}")
     
-    # Strip out any non-digit characters (just in case OCR added weird characters)
     cleaned_text = re.sub(r'[^0-9]', '', raw_text)
     
-    # If the text has 6 digits, treat it as HHMMSS
-    if len(cleaned_text) == 6:
-        h = int(cleaned_text[:2])  # First two digits are hours
-        m = int(cleaned_text[2:4])  # Middle two digits are minutes
-        s = int(cleaned_text[4:])  # Last two digits are seconds
-    else:
-        logger.error(f"Invalid OCR result for timer (expected 6 digits, got {len(cleaned_text)})")
+    # Parse HHMMSS format
+    if len(cleaned_text) != 6:
+        logger.error(f"Invalid timer format: expected 6 digits, got {len(cleaned_text)} ('{cleaned_text}')")
         return None
     
-    # Calculate total time in seconds
-    timer_seconds = h * 3600 + m * 60 + s
-    logger.info(f"Timer parsed: {timer_seconds} seconds ({h:02d}h {m:02d}m {s:02d}s)")
-    return timer_seconds
+    try:
+        h = int(cleaned_text[:2])
+        m = int(cleaned_text[2:4])
+        s = int(cleaned_text[4:6])
+        
+        timer_seconds = h * 3600 + m * 60 + s
+        logger.info(f"Timer parsed: {timer_seconds}s ({h:02d}h {m:02d}m {s:02d}s)")
+        return timer_seconds
+    except ValueError as e:
+        logger.error(f"Failed to parse timer digits: {e}")
+        return None
 
 
-def read_text_from_region(x1, y1, x2, y2):
-    # Read the image
-    adb_screenshot()
-    img = cv2.imread(SCREENSHOT_PATH)
-
-    # crop region
-    crop = img[y1:y2, x1:x2]
+def read_text_from_region(x1: int, y1: int, x2: int, y2: int) -> Optional[str]:
+    """
+    Read alphanumeric text from screen region.
     
-    # OCR numbers + colon from the whole image
-    texts = easyocr_reader.readtext(crop, detail=0)
+    Returns:
+        str: Cleaned alphanumeric text, or None if no text found
+    """
+    crop = _load_screenshot_region(x1, y1, x2, y2)
+    if crop is None:
+        return None
+    
+    texts = _easyocr_reader.readtext(crop, detail=0)
     
     if not texts:
         logger.warning("No OCR result for text region")
         return None
     
-    # Combine OCR results into a single string
+    # Combine and keep only alphanumeric
     raw_text = "".join(texts)
-    # Keep only A–Z, a–z, 0–9
-    alnum_text = re.sub(r'[^A-Za-z0-9]', '', raw_text)
+    clean_text = re.sub(r'[^A-Za-z0-9]', '', raw_text)
+    
+    logger.info(f"OCR text extracted: {clean_text}")
+    return clean_text
 
-    logger.info(f"OCR text extracted: {alnum_text}")
-    return alnum_text
 
-
-def preprocess_text(text):
-    """Normalize text for better matching"""
+def _preprocess_text(text: str) -> str:
+    """Normalize text for better matching (lowercase, no special chars)"""
     return re.sub(r'[^\w\s]', '', text.lower().strip())
 
-def similarity_ratio(a, b):
-    """Calculate similarity between two strings"""
+
+def _similarity_ratio(a: str, b: str) -> float:
+    """Calculate similarity between two strings (0.0 to 1.0)"""
     return SequenceMatcher(None, a, b).ratio()
 
-def find_text_coordinates(target_text, confidence_threshold=0.6):
+
+def find_text_coordinates(target_text: str, confidence_threshold: float = 0.6) -> Optional[List[Tuple[int, int]]]:
     """
-    Find coordinates of text in an image using EasyOCR
+    Find coordinates of text on screen using OCR.
     
     Args:
         target_text: Text to search for
-        confidence_threshold: Similarity threshold (0-1), lower = more tolerant
+        confidence_threshold: Minimum similarity ratio (0.0-1.0)
     
     Returns:
-        List of clickable center points [(x, y), ...] with highest similarity
-        Returns multiple coordinates only when different occurrences have same highest similarity
+        List of (x, y) center points with highest similarity, or None if not found
+        Multiple coordinates returned only when different occurrences have same highest similarity
     """
     adb_screenshot()
-    # Read the image
     image = cv2.imread(SCREENSHOT_PATH)
     
+    if image is None:
+        logger.error(f"Failed to load screenshot from {SCREENSHOT_PATH}")
+        return None
+    
     # Perform OCR
-    results = easyocr_reader.readtext(image)
+    results = _easyocr_reader.readtext(image)
     
-    target_text_normalized = preprocess_text(target_text)
+    target_normalized = _preprocess_text(target_text)
     best_matches = []
-    highest_similarity = 0
+    highest_similarity = 0.0
     
-    for (bbox, text, confidence) in results:
-        # Skip low confidence detections
-        if confidence < 0.3:
+    for bbox, text, ocr_confidence in results:
+        # Skip low confidence OCR results
+        if ocr_confidence < 0.3:
             continue
-            
-        # Normalize the detected text
-        detected_text_normalized = preprocess_text(text)
         
-        # Calculate similarity
-        similarity = similarity_ratio(target_text_normalized, detected_text_normalized)
+        detected_normalized = _preprocess_text(text)
+        similarity = _similarity_ratio(target_normalized, detected_normalized)
         
         # Only consider matches above threshold
         if similarity >= confidence_threshold:
-            # Calculate center point
+            # Calculate center point of bounding box
             x_coords = [point[0] for point in bbox]
             y_coords = [point[1] for point in bbox]
-            
             center_x = int(sum(x_coords) / len(x_coords))
             center_y = int(sum(y_coords) / len(y_coords))
             
-            # Update best matches
+            # Track best matches
             if similarity > highest_similarity:
                 best_matches = [(center_x, center_y)]
                 highest_similarity = similarity
             elif similarity == highest_similarity:
                 best_matches.append((center_x, center_y))
     
+    if best_matches:
+        logger.info(f"Found '{target_text}' with similarity {highest_similarity:.2f}: {best_matches}")
+    else:
+        logger.debug(f"Text '{target_text}' not found (threshold: {confidence_threshold})")
+    
     return best_matches if best_matches else None
-
-
-
