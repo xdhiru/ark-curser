@@ -27,6 +27,7 @@ Thumbs.db
 
 # Runtime artifacts (DO NOT COMMIT - these are auto-generated)
 Screenshots/screen.png
+Templates/test
 Screenshots/screen_tmp.png
 logs/
 *.log
