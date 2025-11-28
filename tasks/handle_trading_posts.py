@@ -102,6 +102,7 @@ class WorkerSet:
     
     PROVISO_SET = {"Proviso", "Quartz", "Tequila"}
     POZEMKA_SET = {"Pozemka", "Tuye", "Jaye"}
+    POZEMKA_SET2 = {"Pozemka", "Tuye", "MrNothing"}
     SHAMARE_SET = {"Shamare", "Firewhistle", "Kirara"}
 
 
@@ -291,6 +292,15 @@ class TradingPost:
         ]
         self._select_workers_by_category(workers)
 
+    def quick_select_tp_workers_pozemka_tuye_mrnothing(self):
+        """Select Pozemka, Tuye, and mrnothing"""
+        workers = [
+            ("operator-categories-sniper-icon", "char-name-pozemka"),
+            ("operator-categories-medic-icon", "char-name-tuye"),
+            ("operator-categories-specialist-icon", "char-name-mrnothing"),
+        ]
+        self._select_workers_by_category(workers)
+
     def quick_select_tp_workers_shamare_firewhistle_kirara(self):
         """Select Shamare, Firewhistle, and Kirara"""
         workers = [
@@ -367,6 +377,8 @@ class TradingPost:
             worker_set = set(self.productivity_workers)
             if WorkerSet.POZEMKA_SET.issubset(worker_set):
                 self.quick_select_tp_workers_pozemka_tuye_jaye()
+            elif WorkerSet.POZEMKA_SET2.issubset(worker_set):
+                self.quick_select_tp_workers_pozemka_tuye_mrnothing()
             elif WorkerSet.SHAMARE_SET.issubset(worker_set):
                 self.quick_select_tp_workers_shamare_firewhistle_kirara()
             else:
