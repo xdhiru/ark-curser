@@ -17,62 +17,21 @@ with open('config/settings.yaml', 'r') as f:
 SCREEN_COORDS = config.get('screen_coordinates', {})
 CURRENTLY_TESTING = config.get('currently_testing', False)
 
-# Configuration constants
-@dataclass
-class CursingConfig:
-    """
-    Configuration for the cursing protocol
-    
-    CONSTRAINTS (to prevent logic errors):
-    1. early_wakeup >= curse_execution_buffer
-       - Must wake up before execution to allow monitoring phase
-       - Example: If buffer is 30s, need at least 30s to monitor
-    
-    2. poll_interval <= curse_execution_buffer  
-       - Must poll frequently enough to catch execution window
-       - Example: If buffer is 30s, polling every 30s ensures we catch it
-    
-    3. curse_conflict_threshold should be reasonable (not too large)
-       - Detects if another curse task is coming soon
-       - Used to decide whether to use drones preemptively
-    
-    4. curse_execution_buffer > 0
-       - Need positive buffer time to prepare for execution
-    
-    5. poll_interval > 0
-       - Need positive polling interval
-    """
-    early_wakeup: int = 90  # Wake up 90s before execution for monitoring
-    poll_interval: int = 30  # Poll every 30s during monitoring phase
-    curse_execution_buffer: int = 30  # Execute when within 30s of scheduled time
-    curse_conflict_threshold: int = 240  # Use drones if another curse within 240s (4 min)
-    
-    def __post_init__(self):
-        """Validate constraints and apply testing overrides"""
-        # Validate critical constraints
-        if self.early_wakeup < self.curse_execution_buffer:
-            raise ValueError(
-                f"early_wakeup ({self.early_wakeup}) must be >= curse_execution_buffer ({self.curse_execution_buffer})"
-            )
-        
-        if self.poll_interval > self.curse_execution_buffer:
-            raise ValueError(
-                f"poll_interval ({self.poll_interval}) must be <= curse_execution_buffer ({self.curse_execution_buffer})"
-            )
-        
-        if self.curse_execution_buffer <= 0:
-            raise ValueError(f"curse_execution_buffer must be > 0")
-        
-        if self.poll_interval <= 0:
-            raise ValueError(f"poll_interval must be > 0")
-        
-        # Apply testing overrides
-        if CURRENTLY_TESTING:
-            self.early_wakeup = 30000
-            self.poll_interval = 2
-            self.curse_execution_buffer = 30000
-            # curse_conflict_threshold remains unchanged in testing
+# Cursing protocol configuration
+CURSE_EXECUTION_BUFFER = config.get('curse_execution_buffer', 45)
+CURSE_CONFLICT_THRESHOLD = config.get('curse_conflict_threshold', 240)
 
+# Validate configuration
+if CURSE_EXECUTION_BUFFER <= 0:
+    raise ValueError(f"curse_execution_buffer must be > 0, got {CURSE_EXECUTION_BUFFER}")
+
+if CURSE_CONFLICT_THRESHOLD < 0:
+    raise ValueError(f"curse_conflict_threshold must be >= 0, got {CURSE_CONFLICT_THRESHOLD}")
+
+# Apply testing overrides
+if CURRENTLY_TESTING:
+    logger.info("Testing mode: Overriding CURSE_EXECUTION_BUFFER to 2s")
+    CURSE_EXECUTION_BUFFER = 2
 
 def handle_trading_posts():
     """Main handler for processing all trading posts"""
@@ -80,12 +39,10 @@ def handle_trading_posts():
     
     for match in tp_matches_list:
         TradingPost(match["x"], match["y"])
-        logger.info("Trading post handled, returning to base and sleeping 5 seconds")
+        logger.info("Trading post handled, returning to base")
         return_back_to_base_left_side()
-        time.sleep(5)
 
     TradingPost.initiate_cursing_protocol()
-
 
 @dataclass
 class WorkerSet:
@@ -168,15 +125,15 @@ class TradingPost:
             IST_time, remaining_str = get_ist_time_and_remaining(self.execution_timestamp)
             logger.info(f"TP {self.id}: Set execution timestamp to {IST_time} (in {remaining_str})")
 
-    def _schedule_curse(self):
+    def _schedule_curse(self, prelay: int = 45):
         """Schedule a curse task"""
-        curse_time = self.execution_timestamp - 40
+        curse_time = self.execution_timestamp - prelay
         heapq.heappush(self.curse_uncurse_queue, (curse_time, self, True))
         logger.debug(f"TP {self.id}: Scheduled curse task")
 
-    def _schedule_uncurse(self):
+    def _schedule_uncurse(self, delay: int = 10):
         """Schedule an uncurse task"""
-        uncurse_time = self.execution_timestamp + 10
+        uncurse_time = self.execution_timestamp + delay
         heapq.heappush(self.curse_uncurse_queue, (uncurse_time, self, False))
         logger.debug(f"TP {self.id}: Scheduled uncurse task")
 
@@ -202,9 +159,9 @@ class TradingPost:
     def _prepare_worker_list(self):
         """Prepare worker list with common sorting and filtering"""
         click_template("worker-list-sort-by-trust")
-        time.sleep(0.25)
+        time.sleep(0.15)
         click_template("worker-list-sort-by-skill")
-        time.sleep(0.25)
+        time.sleep(0.15)
 
     def select_tp_worker_by_text_ocr(self, tp_worker: str, max_swipes: int = 40, reset_swipes: int = 30):
         """Select a worker using OCR text recognition"""
@@ -212,11 +169,11 @@ class TradingPost:
         
         # Reset to all category
         click_template("operator-categories-all-icon")
-        time.sleep(0.25)
+        time.sleep(0.15)
         click_template("operator-categories-supporter-icon")
-        time.sleep(0.25)
+        time.sleep(0.15)
         click_template("operator-categories-all-icon")
-        time.sleep(0.25)
+        time.sleep(0.15)
         
         swipe_count = 0
         while swipe_count < max_swipes:
@@ -259,12 +216,12 @@ class TradingPost:
         
         current_category = None
         for category_icon, worker_name in workers_config:
-            time.sleep(0.25)
+            time.sleep(0.15)
             # Only click category if it's different from the current one
             if category_icon != current_category:
                 click_template(category_icon)
                 current_category = category_icon
-                time.sleep(0.25)
+                time.sleep(0.15)
             self._scroll_and_tap_worker(worker_name)
 
     def quick_select_tp_workers_proviso_quartz_tequila(self):
@@ -336,12 +293,12 @@ class TradingPost:
             return False
         
         click_template(drones_icon)
-        time.sleep(0.25)
+        time.sleep(0.15)
         click_template("tp-use-drones-max-icon")
-        time.sleep(0.25)
+        time.sleep(0.15)
         click_template("tp-use-drones-confirm-button")
         logger.info(f"TP {self.id}: Used drones successfully")
-        time.sleep(0.25)
+        time.sleep(0.15)
         return True
 
     def curse(self, use_drones_after_curse: bool = False):
@@ -408,27 +365,25 @@ class TradingPost:
         logger.info(f"TP {self.id}: Uncurse completed in {duration:.1f}s")
 
     @classmethod
-    def _should_use_drones_after_curse(cls, execution_time: float, threshold: int) -> bool:
+    def _should_use_drones_after_curse(cls, execution_time: float) -> bool:
         """
         Check if curse should use drones due to another close curse task.
         
         Args:
             execution_time: Current curse task execution time
-            threshold: Time window to check (seconds)
         
         Returns:
             bool: True if should use drones, False otherwise
         """
         for task_time, _, is_curse in cls.curse_uncurse_queue:
             # Check if there's another CURSE task coming within threshold
-            if is_curse and 0 < (task_time - execution_time) <= threshold:
+            if is_curse and 0 < (task_time - execution_time) <= CURSE_CONFLICT_THRESHOLD:
                 logger.info(f"Found another curse task in {task_time - execution_time:.0f}s, using drones")
                 return True
         return False
 
     @classmethod
-    def _execute_task(cls, trading_post: 'TradingPost', is_curse: bool, 
-                     execution_time: float, config: CursingConfig):
+    def _execute_task(cls, trading_post: 'TradingPost', is_curse: bool, execution_time: float):
         """
         Execute a curse or uncurse task.
         
@@ -436,7 +391,6 @@ class TradingPost:
             trading_post: TradingPost instance to execute on
             is_curse: True for curse, False for uncurse
             execution_time: Scheduled execution time
-            config: Cursing configuration
         """
         task_type = "CURSE" if is_curse else "UNCURSE"
         logger.info(f"Executing {task_type} for TP {trading_post.id}")
@@ -446,7 +400,7 @@ class TradingPost:
             if is_curse:
                 # Check if we should use drones due to upcoming curse tasks
                 trading_post.enter_TP()
-                use_drones = cls._should_use_drones_after_curse(execution_time, config.curse_conflict_threshold)
+                use_drones = cls._should_use_drones_after_curse(execution_time)
                 trading_post.curse(use_drones_after_curse=use_drones)
             else:
                 # For uncurse, sleep until exact execution time
@@ -465,11 +419,9 @@ class TradingPost:
     @classmethod
     def initiate_cursing_protocol(cls):
         """Main loop for processing curse/uncurse tasks"""
-        config = CursingConfig()
         logger.info("Cursing protocol initiated")
-        logger.info(f"Config: early_wakeup={config.early_wakeup}s, poll={config.poll_interval}s, "
-                   f"buffer={config.curse_execution_buffer}s, conflict_threshold={config.curse_conflict_threshold}s")
-        
+        logger.info(f"Config: buffer={CURSE_EXECUTION_BUFFER}s, "
+                   f"conflict_threshold={CURSE_CONFLICT_THRESHOLD}s")
         while True:
             try:
                 if not cls.curse_uncurse_queue:
@@ -482,24 +434,16 @@ class TradingPost:
                 time_left = execution_time - current_time
                 task_type = "CURSE" if is_curse else "UNCURSE"
 
-                # Execute if within buffer
-                if time_left <= config.curse_execution_buffer:
+                # Execute if within buffer window (or already past scheduled time)
+                if time_left <= CURSE_EXECUTION_BUFFER:
                     heapq.heappop(cls.curse_uncurse_queue)
-                    cls._execute_task(trading_post, is_curse, execution_time, config)
+                    cls._execute_task(trading_post, is_curse, execution_time)
                     continue
                 
-                # Calculate sleep time based on phase
-                if time_left <= config.early_wakeup:
-                    # Monitoring phase - poll frequently
-                    sleep_time = min(config.poll_interval, max(1, time_left - config.curse_execution_buffer))
-                    IST_time, remaining_str = get_ist_time_and_remaining(execution_time)
-                    logger.info(f"Monitoring - Task: [TP{trading_post.id}, {task_type}, {IST_time}] in {remaining_str}, sleeping {sleep_time:.1f}s")
-                else:
-                    # Deep sleep phase - sleep once until early wakeup
-                    sleep_time = time_left - config.early_wakeup
-                    IST_time, remaining_str = get_ist_time_and_remaining(execution_time)
-                    logger.info(f"Deep sleep - Upcoming Task: [TP{trading_post.id}, {task_type}, {IST_time}]")
-                
+                # Sleep until CURSE_EXECUTION_BUFFER seconds before execution
+                sleep_time = time_left - CURSE_EXECUTION_BUFFER
+                IST_time, remaining_str = get_ist_time_and_remaining(execution_time)
+                logger.info(f"Deep Sleep - Next Task: [TP{trading_post.id}, {task_type}, {IST_time}] in {remaining_str}")
                 time.sleep(sleep_time)
                     
             except Exception as e:
