@@ -66,10 +66,7 @@ def read_timer_from_region(x1: int, y1: int, x2: int, y2: int) -> Optional[int]:
         h = int(cleaned_text[:2])
         m = int(cleaned_text[2:4])
         s = int(cleaned_text[4:6])
-        
-        timer_seconds = h * 3600 + m * 60 + s
-        logger.info(f"Timer parsed: {timer_seconds}s ({h:02d}h {m:02d}m {s:02d}s)")
-        return timer_seconds
+        return h * 3600 + m * 60 + s
     except ValueError as e:
         logger.error(f"Failed to parse timer digits: {e}")
         return None
