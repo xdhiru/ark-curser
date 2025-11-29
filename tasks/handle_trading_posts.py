@@ -125,7 +125,7 @@ class TradingPost:
             IST_time, remaining_str = get_ist_time_and_remaining(self.execution_timestamp)
             logger.info(f"TP {self.id}: Set execution timestamp to {IST_time} (in {remaining_str})")
 
-    def _schedule_curse(self, prelay: int = 45):
+    def _schedule_curse(self, prelay: int = 40):
         """Schedule a curse task"""
         curse_time = self.execution_timestamp - prelay
         heapq.heappush(self.curse_uncurse_queue, (curse_time, self, True))
@@ -139,9 +139,9 @@ class TradingPost:
 
     def collect_orders(self):
         """Collect ready orders"""
-        time.sleep(0.5)
         try: 
             click_template("tp-order-ready-to-deliver")
+            time.sleep(1)
         except:
             logger.info(f"TP {self.id}: No ready orders to collect")
             pass  # No ready orders
@@ -289,7 +289,7 @@ class TradingPost:
             self.enter_TP()
         
         if not (drones_icon := find_template("tp-use-drones-icon")):
-            logger.info(f"TP {self.id}: Can't find drone icon, halting")
+            logger.error(f"TP {self.id}: Can't find drone icon, halting")
             return False
         
         click_template(drones_icon)
@@ -298,7 +298,7 @@ class TradingPost:
         time.sleep(0.15)
         click_template("tp-use-drones-confirm-button")
         logger.info(f"TP {self.id}: Used drones successfully")
-        time.sleep(0.15)
+        time.sleep(1)
         return True
 
     def curse(self, use_drones_after_curse: bool = False):
