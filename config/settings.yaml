@@ -13,6 +13,9 @@ use_gpu: true
 
 # Fine-tunable static Values 
 
+
+
+
 # TP Interaction Delays (in seconds)
 curse_execution_buffer: 45
 curse_conflict_threshold: 240
@@ -25,3 +28,8 @@ screen_coordinates:
   productivity_worker_1_region: [630, 485, 825, 525]
   productivity_worker_2_region: [630, 910, 825, 950]
   productivity_worker_3_region: [845, 485, 1040, 525]
+  dorm1_info_region: [750, 280]
+  dorm2_info_region: [750, 530] 
+  dorm3_info_region: [750, 760]
+  dorm4_info_region: [750, 1000]
+  factory_workers_entry_button: [485, 965]
