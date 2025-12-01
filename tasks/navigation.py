@@ -60,9 +60,9 @@ def is_home_screen() -> bool:
     return bool(find_template("settings-icon"))
 
 
-def check_if_reached_base() -> bool:
+def is_base() -> bool:
     """Check if currently at base view"""
-    return bool(find_template("reached-base"))
+    return bool(find_template("base-overview-icon"))
 
 
 def navigate_back_until(check_func: Callable[[], bool], timeout: int = 80) -> bool:
@@ -97,6 +97,10 @@ def reach_home_screen() -> bool:
     Returns:
         bool: True if home screen reached, False otherwise
     """
+    if is_home_screen():
+        logger.debug("Already at home screen")
+        return True
+    
     logger.info("Navigating to home screen")
     return navigate_back_until(is_home_screen)
 
@@ -108,22 +112,21 @@ def reach_base() -> bool:
     Returns:
         bool: True if base reached, False otherwise
     """
-    logger.info("Navigating to base")
+    logger.debug("Navigating to base")
+    # Navigate home first if needed
+    while not (is_home_screen() or is_base()):
+        click_template("back-icon")
+        time.sleep(1)
     
-    # Check if already at base
-    if check_if_reached_base():
+    if is_base():
         logger.debug("Already at base")
         return True
+    if is_home_screen():
+        # Click base icon and wait
+        click_template("base-icon")
+        time.sleep(5)
     
-    # Navigate home first if not there
-    if not is_home_screen():
-        reach_home_screen()
-    
-    # Click base icon and wait
-    click_template("base-icon")
-    time.sleep(5)
-    
-    return check_if_reached_base()
+    return True
 
 
 def reach_base_left_side() -> bool:
@@ -133,24 +136,10 @@ def reach_base_left_side() -> bool:
     Returns:
         bool: True if positioned successfully
     """
-    if not check_if_reached_base():
-        reach_base()
-    
-    logger.info("Positioning on base left side")
+    reach_base()
+    logger.debug("Positioning on base left side")
     swipe_right()
-    return True
-
-
-def return_back_to_base_left_side() -> bool:
-    """
-    Navigate back to base and position on left side.
-    
-    Returns:
-        bool: True if positioned successfully
-    """
-    logger.info("Navigating back to base (left side)")
-    navigate_back_until(check_if_reached_base)
-    reach_base_left_side()
+    time.sleep(1)
     return True
 
 
@@ -172,7 +161,7 @@ def find_trading_posts() -> List[Dict]:
     if not tp_matches:
         logger.info("Base appears zoomed out, repositioning")
         click_template("trading-post-zoomed-out-base")
-        return_back_to_base_left_side()
+        reach_base_left_side()
         tp_matches = find_template("trading-post")
     
     if tp_matches:
@@ -181,6 +170,49 @@ def find_trading_posts() -> List[Dict]:
         logger.warning("No trading posts found")
     
     return tp_matches or []
+
+
+def find_factories() -> List[Dict]:
+    """
+    Find all factories on base (left side).
+    Handles both zoomed-in and zoomed-out base views.
+    
+    Returns:
+        List of factories coordinate dictionaries
+    """
+    logger.info("Searching for factories")
+    reach_base_left_side()
+    
+    # Try to find factories
+    fac_matches = find_template("factory")
+    
+    # If not found, base might be zoomed out - reposition
+    if not fac_matches:
+        logger.info("Base appears zoomed out, repositioning")
+        click_template("factory-zoomed-out-base")
+        reach_base_left_side()
+        fac_matches = find_template("factory")
+    
+    if fac_matches:
+        logger.info(f"Found {len(fac_matches)} factories")
+    else:
+        logger.warning("No factories found")
+    
+    return fac_matches or []
+
+
+def enter_base_overview():
+    """
+    Enter base overview screen.
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    logger.info("Entering base overview")
+    reach_base()
+    click_template("base-overview-icon")
+    time.sleep(0.25)
+    return True
 
 
 def wait_for_template(

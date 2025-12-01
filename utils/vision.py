@@ -121,6 +121,10 @@ def find_template(template_name: str, threshold: float = 0.8, min_distance: floa
     
     # Remove duplicate nearby matches
     unique_matches = _remove_duplicate_matches(raw_matches, min_distance)
+
+    # Sort matches by y (ascending) then x (ascending) when we have multiple matches
+    if len(unique_matches) > 1:
+        unique_matches.sort(key=lambda m: (m["y"], m["x"]))
     
     logger.debug(f"Template '{template_name}' found {len(unique_matches)} unique matches")
     return unique_matches

@@ -97,7 +97,7 @@ def adb_swipe(x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300) -> str
 
 
 # Swipe presets with consistent sleep timing
-_SWIPE_SLEEP = 0.25
+_SWIPE_SLEEP = 0.2
 
 def swipe_left():
     """Swipe left on screen"""
@@ -124,6 +124,12 @@ def slow_swipe_right():
     """Slow swipe right on screen"""
     logger.debug("Slow swiping right")
     adb_swipe(1000, 550, 1500, 550, 700)
+    time.sleep(_SWIPE_SLEEP)
+
+def slow_swipe_up():
+    """Slow swipe up on screen"""
+    logger.debug("Slow swiping up")
+    adb_swipe(1200, 870, 1200, 500, 650)
     time.sleep(_SWIPE_SLEEP)
 
 

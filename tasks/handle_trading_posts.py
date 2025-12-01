@@ -40,7 +40,7 @@ def handle_trading_posts():
     for match in tp_matches_list:
         TradingPost(match["x"], match["y"])
         logger.info("Trading post handled, returning to base")
-        return_back_to_base_left_side()
+        reach_base_left_side()
 
     TradingPost.initiate_cursing_protocol()
 
@@ -52,6 +52,8 @@ class WorkerSet:
     POZEMKA_SET2 = {"Pozemka", "Tuye", "MrNothing"}
     SHAMARE_SET = {"Shamare", "Firewhistle", "Kirara"}
     SHAMARE_SET2 = {"Shamare", "Gummy", "Kirara"}
+    TEXAS_SET = {"Texas", "Lappland", "Jaye"}
+    EXUSIAI_SET = {"Exusiai", "Midnight", "Gummy"}
 
 
 class TradingPost:
@@ -268,6 +270,24 @@ class TradingPost:
             ("operator-categories-specialist-icon", "char-name-kirara"),
         ]
         self._select_workers_by_category(workers)
+    
+    def quick_select_tp_workers_texas_lappland_jaye(self):
+        """Select Texas, Lappland, and Jaye"""
+        workers = [
+            ("operator-categories-vanguard-icon", "char-name-texas"),
+            ("operator-categories-guard-icon", "char-name-lappland"),
+            ("operator-categories-specialist-icon", "char-name-jaye"),
+        ]
+        self._select_workers_by_category(workers)
+    
+    def quick_select_tp_workers_exusiai_midnight_gummy(self):
+        """Select Exusiai, Quartz, and Gummy"""
+        workers = [
+            ("operator-categories-sniper-icon", "char-name-exusiai"),
+            ("operator-categories-guard-icon", "char-name-midnight"),
+            ("operator-categories-defender-icon", "char-name-gummy"),
+        ]
+        self._select_workers_by_category(workers)
 
     def deselect_all_tp_workers(self):
         """Deselect all workers"""
@@ -351,6 +371,10 @@ class TradingPost:
                 self.quick_select_tp_workers_shamare_firewhistle_kirara()
             elif WorkerSet.SHAMARE_SET2.issubset(worker_set):
                 self.quick_select_tp_workers_shamare_gummy_kirara()
+            elif WorkerSet.TEXAS_SET.issubset(worker_set):
+                self.quick_select_tp_workers_texas_lappland_jaye()
+            elif WorkerSet.EXUSIAI_SET.issubset(worker_set):
+                self.quick_select_tp_workers_exusiai_midnight_gummy()
             else:
                 for worker in self.productivity_workers:
                     self.select_tp_worker_by_text_ocr(worker)
@@ -412,7 +436,7 @@ class TradingPost:
                 time.sleep(sleep_time)
                 trading_post.enter_TP()  # it's important that we enter TP *after* the sleep as it collects the orders on the first tap
                 trading_post.uncurse()
-            return_back_to_base_left_side()
+            reach_base_left_side()
         except Exception as e:
             logger.error(f"Error executing {task_type} for TP {trading_post.id}: {e}", exc_info=True)
 
