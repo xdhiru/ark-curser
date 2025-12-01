@@ -408,9 +408,9 @@ class TradingPost:
                 
                 if CURRENTLY_TESTING:
                     sleep_time = 2
-                
+                logger.info(f"Sleeping for {sleep_time:.1f}s before uncurse for TP {trading_post.id}")
                 time.sleep(sleep_time)
-                trading_post.enter_TP()  # it's imporrtant that we enter TP *after* the sleep as it collects the orders on the first tap
+                trading_post.enter_TP()  # it's important that we enter TP *after* the sleep as it collects the orders on the first tap
                 trading_post.uncurse()
             return_back_to_base_left_side()
         except Exception as e:
