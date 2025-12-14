@@ -160,18 +160,25 @@ class TradingPost:
         return f"TradingPost({self.id}, x={self.x}, y={self.y}, cursed={self.is_currently_cursed})"
     
     @contextmanager
-    def _ensure_inside_tp(self):
-        """Context manager to ensure we're inside the trading post"""
-        if not find_template("check-if-inside-tp"):
+    def _ensure_inside_tp(self, max_retries=3, interval=1):
+        for retries in range(max_retries):
+            if is_inside_tp():
+                break  # Found the template
+
             self.enter_TP()
-        try:
-            yield
-        finally:
-            pass  # Could add cleanup logic here
+            time.sleep(interval)
+
+        else:
+            logger.debug(f"Failed to confirm TP entry after {max_retries} attempts")
+            yield False
+            return
+
+        yield True
+
     
     def enter_TP(self):
         """Enter the trading post"""
-        logger.info(f"TP {self.id}: Clicking TP at ({self.x}, {self.y}) to enter")
+        logger.debug(f"TP {self.id}: Clicking TP at ({self.x}, {self.y}) to enter")
         adb_tap(self.x, self.y)
         time.sleep(1)
         click_template("tp-entry-arrow")
@@ -179,7 +186,7 @@ class TradingPost:
 
     def enter_TP_workers(self) -> bool:
         """Enter the workers section of the trading post"""
-        logger.info(f"TP {self.id}: Entering TP workers")
+        logger.debug(f"TP {self.id}: Entering TP workers")
         time.sleep(0.5)
         x, y = SCREEN_COORDS['tp_workers_entry_button']
         adb_tap(x, y)
@@ -197,7 +204,7 @@ class TradingPost:
         with self._ensure_inside_tp():
             self.execution_timestamp = time.time() + self.scan_timer()
             IST_time, remaining_str = get_ist_time_and_remaining(self.execution_timestamp)
-            logger.info(f"TP {self.id}: Set execution timestamp to {IST_time} (in {remaining_str})")
+            logger.info(f"TP {self.id}: Set next execution at {IST_time} (in {remaining_str})")
 
     def _schedule_curse(self, prelay: int = 40):
         """Schedule a curse task"""
@@ -271,7 +278,7 @@ class TradingPost:
         for _ in range(timeout_swipes):
             if coords := find_template(worker_name):
                 click_template(coords)
-                logger.info(f"TP {self.id}: Found and tapped worker '{worker_name}'")
+                logger.debug(f"TP {self.id}: Found and tapped worker '{worker_name}'")
                 return True
             slow_swipe_left()
         
@@ -312,24 +319,25 @@ class TradingPost:
     def use_drones_on_tp(self) -> bool:
         """Use drones on the trading post"""
         time.sleep(0.5)
+        logger.info(f"TP {self.id}: Using drones on TP")
         
-        if not find_template("order-efficiency-screen"):
-            logger.warning(f"TP {self.id}: Not inside trading post, trying to enter")
-            reach_base_left_side()
-            self.enter_TP()
-        
-        if not (drones_icon := find_template("tp-use-drones-icon")):
-            logger.error(f"TP {self.id}: Can't find drone icon, halting")
-            return False
-        
-        click_template(drones_icon)
-        time.sleep(0.15)
-        click_template("tp-use-drones-max-icon")
-        time.sleep(0.15)
-        click_template("tp-use-drones-confirm-button")
-        logger.info(f"TP {self.id}: Used drones successfully")
-        time.sleep(1)
-        return True
+        with self._ensure_inside_tp() as inside_TP:
+            if not inside_TP:
+                logger.error(f"TP {self.id}: Not inside TP, cannot use drones")
+                return False
+
+            if not (drones_icon := find_template("tp-use-drones-icon")):
+                logger.error(f"TP {self.id}: Can't find drone icon, halting")
+                return False
+            
+            click_template(drones_icon)
+            time.sleep(0.15)
+            click_template("tp-use-drones-max-icon")
+            time.sleep(0.15)
+            click_template("tp-use-drones-confirm-button")
+            logger.info(f"TP {self.id}: Used drones successfully")
+            time.sleep(1)
+            return True
 
     def curse(self, use_drones_after_curse: bool = False):
         """
@@ -341,7 +349,10 @@ class TradingPost:
         logger.info(f"TP {self.id}: Performing curse task (drones={use_drones_after_curse})")
         start_time = time.time()
         
-        with self._ensure_inside_tp():
+        with self._ensure_inside_tp() as inside_TP:
+            if not inside_TP:
+                logger.error(f"TP {self.id}: Not inside TP, cannot perform curse")
+                return False
             self.enter_TP_workers()
             self.save_tp_productivity_workers()
             self.deselect_all_tp_workers()
@@ -368,7 +379,11 @@ class TradingPost:
         logger.info(f"TP {self.id}: Performing uncurse task")
         start_time = time.time()
         
-        with self._ensure_inside_tp():
+        with self._ensure_inside_tp() as inside_TP:
+            if not inside_TP:
+                logger.error(f"TP {self.id}: Not inside TP, cannot perform uncurse")
+                return False
+
             self.enter_TP_workers()
             self.deselect_all_tp_workers()
             
@@ -428,7 +443,6 @@ class TradingPost:
             reach_base_left_side()
             if is_curse:
                 # Check if we should use drones due to upcoming curse tasks
-                trading_post.enter_TP()
                 use_drones = cls._should_use_drones_after_curse(execution_time)
                 trading_post.curse(use_drones_after_curse=use_drones)
             else:
@@ -439,9 +453,8 @@ class TradingPost:
                     sleep_time = 2
                 logger.info(f"Sleeping for {sleep_time:.1f}s before uncurse for TP {trading_post.id}")
                 time.sleep(sleep_time)
-                trading_post.enter_TP()  # it's important that we enter TP *after* the sleep as it collects the orders on the first tap
                 trading_post.uncurse()
-            reach_base_left_side()
+
         except Exception as e:
             logger.error(f"Error executing {task_type} for TP {trading_post.id}: {e}", exc_info=True)
 

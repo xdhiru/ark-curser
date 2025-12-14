@@ -29,7 +29,7 @@ def click_template(template_name, threshold: float = 0.8) -> bool:
         )
     
     if not matches:
-        logger.warning(f"Template '{template_name}' not found")
+        logger.debug(f"Template '{template_name}' not found")
         return False
     
     # Click the first (best) match
@@ -63,6 +63,10 @@ def is_home_screen() -> bool:
 def is_base() -> bool:
     """Check if currently at base view"""
     return bool(find_template("base-overview-icon"))
+
+def is_inside_tp() -> bool:
+    """Check if currently at trading post view"""
+    return bool(find_template("check-if-inside-tp"))
 
 
 def navigate_back_until(check_func: Callable[[], bool], timeout: int = 80) -> bool:
