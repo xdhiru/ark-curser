@@ -48,19 +48,8 @@ def handle_trading_posts():
 class WorkerConfig:
     """Centralized worker configuration with category mappings"""
     
-    # Category icon mappings
-    CATEGORIES = {
-        'vanguard': 'operator-categories-vanguard-icon',
-        'guard': 'operator-categories-guard-icon',
-        'defender': 'operator-categories-defender-icon',
-        'sniper': 'operator-categories-sniper-icon',
-        'caster': 'operator-categories-caster-icon',
-        'medic': 'operator-categories-medic-icon',
-        'supporter': 'operator-categories-supporter-icon',
-        'specialist': 'operator-categories-specialist-icon',
-    }
-    
-    # Worker template mappings (character name -> template name)
+    # Worker mappings: name -> (category, template_name)
+    # Category icons are formatted as f"operator-categories-{category}-icon"
     WORKERS = {
         'Proviso': ('supporter', 'char-name-proviso'),
         'Quartz': ('guard', 'char-name-quartz'),
@@ -116,7 +105,8 @@ class WorkerConfig:
                 logger.warning(f"Worker '{name}' not found in configuration")
                 continue
             category, template = cls.WORKERS[name]
-            config.append((cls.CATEGORIES[category], template))
+            category_icon = f"operator-categories-{category.lower()}-icon"
+            config.append((category_icon, template))
         return config
     
     @classmethod
@@ -129,7 +119,7 @@ class WorkerConfig:
             worker_names: List of worker names to match
             
         Returns:
-            Matched worker list if found, None otherwise
+            Matched worker tuple if found, None otherwise
         """
         worker_set = set(worker_names)
         for set_workers in cls.WORKER_SETS:
