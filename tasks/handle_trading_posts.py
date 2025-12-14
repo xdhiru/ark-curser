@@ -81,21 +81,23 @@ class WorkerConfig:
         'Underflow': ('defender', 'char-name-underflow'),
     }
     
-    # Predefined worker sets for quick selection
-    WORKER_SETS = {
-        'proviso': ['Proviso', 'Quartz', 'Tequila'],
-        'pozemka': ['Pozemka', 'Tuye', 'Jaye'],
-        'pozemka2': ['Pozemka', 'Tuye', 'MrNothing'],
-        'pozemka3': ['Pozemka', 'Tuye', 'Quartz'],
-        'pozemka4': ['Pozemka', 'Tuye', 'Underflow'],
-        'shamare': ['Shamare', 'Firewhistle', 'Kirara'],
-        'shamare2': ['Shamare', 'Gummy', 'Kirara'],
-        'shamare3': ['Shamare', 'Gummy', 'Midnight'],
-        'texas': ['Texas', 'Lappland', 'Jaye'],
-        'exusiai': ['Exusiai', 'Lemuen', 'Underflow'],
-        'exusiai2': ['Exusiai', 'Lemuen', 'Kirara'],
-        'exusiai3': ['Exusiai', 'Lemuen', 'Jaye'],
-    }
+    # Curse worker set - used during curse operations
+    CURSE_WORKERS = ('Proviso', 'Quartz', 'Tequila')
+    
+    # Predefined worker sets for productivity (uncurse) operations
+    WORKER_SETS = (
+        ('Pozemka', 'Tuye', 'Jaye'),
+        ('Pozemka', 'Tuye', 'MrNothing'),
+        ('Pozemka', 'Tuye', 'Quartz'),
+        ('Pozemka', 'Tuye', 'Underflow'),
+        ('Shamare', 'Firewhistle', 'Kirara'),
+        ('Shamare', 'Gummy', 'Kirara'),
+        ('Shamare', 'Gummy', 'Midnight'),
+        ('Texas', 'Lappland', 'Jaye'),
+        ('Exusiai', 'Lemuen', 'Underflow'),
+        ('Exusiai', 'Lemuen', 'Kirara'),
+        ('Exusiai', 'Lemuen', 'Jaye'),
+    )
     
     @classmethod
     def get_worker_config(cls, worker_names: List[str]) -> List[Tuple[str, str]]:
@@ -118,10 +120,10 @@ class WorkerConfig:
         return config
     
     @classmethod
-    def match_worker_set(cls, worker_names: List[str]) -> Optional[List[str]]:
+    def match_worker_set(cls, worker_names: List[str]) -> Optional[Tuple[str, ...]]:
         """
         Find which predefined set matches the given workers.
-        Returns the matched worker list (not the key) for direct use.
+        Returns the matched worker tuple for direct use.
         
         Args:
             worker_names: List of worker names to match
@@ -130,9 +132,9 @@ class WorkerConfig:
             Matched worker list if found, None otherwise
         """
         worker_set = set(worker_names)
-        for set_key, set_workers in cls.WORKER_SETS.items():
+        for set_workers in cls.WORKER_SETS:
             if set(set_workers).issubset(worker_set):
-                return set_workers  # Return the list, not the key
+                return set_workers
         return None
 
 
@@ -353,8 +355,8 @@ class TradingPost:
             self.enter_TP_workers()
             self.save_tp_productivity_workers()
             self.deselect_all_tp_workers()
-            # Use the universal method with the curse worker set
-            self.select_workers_by_names(WorkerConfig.WORKER_SETS['proviso'])
+            # Use curse worker set
+            self.select_workers_by_names(WorkerConfig.CURSE_WORKERS)
             self.confirm_tp_workers()
             self.is_currently_cursed = True
             
