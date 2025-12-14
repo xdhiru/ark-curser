@@ -156,25 +156,20 @@ def find_trading_posts() -> List[Dict]:
     Returns:
         List of trading post coordinate dictionaries
     """
-    logger.info("Searching for trading posts")
-    reach_base_left_side()
-    
     # Try to find trading posts
+    logger.debug("Searching for trading posts")
     tp_matches = find_template("trading-post")
     
     # If not found, base might be zoomed out - reposition
+    # # Task for later: Take this out of function 
     if not tp_matches:
-        logger.info("Base appears zoomed out, repositioning")
+        logger.debug("Base appears zoomed out, repositioning")
         click_template("trading-post-zoomed-out-base")
         reach_base_left_side()
         tp_matches = find_template("trading-post")
     
-    if tp_matches:
-        logger.info(f"Found {len(tp_matches)} trading post(s)")
-    else:
-        logger.warning("No trading posts found")
-    
-    return tp_matches or []
+    logger.debug(f"Found {len(tp_matches)} trading post(s)")
+    return tp_matches
 
 
 def find_factories() -> List[Dict]:

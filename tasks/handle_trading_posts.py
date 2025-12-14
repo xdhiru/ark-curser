@@ -34,14 +34,14 @@ if CURRENTLY_TESTING:
     CURSE_EXECUTION_BUFFER = 2
 
 def handle_trading_posts():
-    """Main handler for processing all trading posts"""
-    tp_matches_list = find_trading_posts()
-    
+    """Main handler for processing trading posts"""
+    logger.info("Initializing trading posts...")
+    reach_base_left_side()
+    tp_matches_list = find_trading_posts()    
     for match in tp_matches_list:
         TradingPost(match["x"], match["y"])
-        logger.info("Trading post handled, returning to base")
         reach_base_left_side()
-
+    logger.info("Trading posts initialized. Starting curse protocol.")
     TradingPost.initiate_cursing_protocol()
 
 @dataclass
@@ -136,6 +136,7 @@ class TradingPost:
     curse_uncurse_queue: List[Tuple[float, 'TradingPost', bool]] = []
     
     def __init__(self, x: int, y: int):
+        logger.debug(f"Initializing TradingPost at ({x}, {y})")
         self.x = x
         self.y = y
         self.id = self._increment_count()
@@ -146,6 +147,7 @@ class TradingPost:
         TradingPost.all_trading_posts.append(self)
         self.update_execution_timestamp()
         self._schedule_curse()
+        logger.debug(f"TradingPost {self.id} initialized with first curse at {self.execution_timestamp}")
         
     @classmethod
     def _increment_count(cls) -> int:
@@ -461,9 +463,7 @@ class TradingPost:
     @classmethod
     def initiate_cursing_protocol(cls):
         """Main loop for processing curse/uncurse tasks"""
-        logger.info("Cursing protocol initiated")
-        logger.info(f"Config: buffer={CURSE_EXECUTION_BUFFER}s, "
-                   f"conflict_threshold={CURSE_CONFLICT_THRESHOLD}s")
+        logger.info(f"Cursing protocol initiated: buffer={CURSE_EXECUTION_BUFFER}s, conflict_threshold={CURSE_CONFLICT_THRESHOLD}s")
         while True:
             try:
                 if not cls.curse_uncurse_queue:
