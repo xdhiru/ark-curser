@@ -45,15 +45,95 @@ def handle_trading_posts():
     TradingPost.initiate_cursing_protocol()
 
 @dataclass
-class WorkerSet:
-    """Defines worker configuration sets for quick selection"""
-    PROVISO_SET = {"Proviso", "Quartz", "Tequila"}
-    POZEMKA_SET = {"Pozemka", "Tuye", "Jaye"}
-    POZEMKA_SET2 = {"Pozemka", "Tuye", "MrNothing"}
-    SHAMARE_SET = {"Shamare", "Firewhistle", "Kirara"}
-    SHAMARE_SET2 = {"Shamare", "Gummy", "Kirara"}
-    TEXAS_SET = {"Texas", "Lappland", "Jaye"}
-    EXUSIAI_SET = {"Exusiai", "Midnight", "Gummy"}
+class WorkerConfig:
+    """Centralized worker configuration with category mappings"""
+    
+    # Category icon mappings
+    CATEGORIES = {
+        'vanguard': 'operator-categories-vanguard-icon',
+        'guard': 'operator-categories-guard-icon',
+        'defender': 'operator-categories-defender-icon',
+        'sniper': 'operator-categories-sniper-icon',
+        'caster': 'operator-categories-caster-icon',
+        'medic': 'operator-categories-medic-icon',
+        'supporter': 'operator-categories-supporter-icon',
+        'specialist': 'operator-categories-specialist-icon',
+    }
+    
+    # Worker template mappings (character name -> template name)
+    WORKERS = {
+        'Proviso': ('supporter', 'char-name-proviso'),
+        'Quartz': ('guard', 'char-name-quartz'),
+        'Tequila': ('guard', 'char-name-tequila'),
+        'Pozemka': ('sniper', 'char-name-pozemka'),
+        'Tuye': ('medic', 'char-name-tuye'),
+        'Jaye': ('specialist', 'char-name-jaye'),
+        'MrNothing': ('specialist', 'char-name-mrnothing'),
+        'Shamare': ('supporter', 'char-name-shamare'),
+        'Firewhistle': ('defender', 'char-name-firewhistle'),
+        'Kirara': ('specialist', 'char-name-kirara'),
+        'Gummy': ('defender', 'char-name-gummy'),
+        'Midnight': ('guard', 'char-name-midnight'),
+        'Texas': ('vanguard', 'char-name-texas'),
+        'Lappland': ('guard', 'char-name-lappland'),
+        'Exusiai': ('sniper', 'char-name-exusiai'),
+        'Lemuen': ('sniper', 'char-name-lemuen'),
+        'Underflow': ('defender', 'char-name-underflow'),
+    }
+    
+    # Predefined worker sets for quick selection
+    WORKER_SETS = {
+        'proviso': ['Proviso', 'Quartz', 'Tequila'],
+        'pozemka': ['Pozemka', 'Tuye', 'Jaye'],
+        'pozemka2': ['Pozemka', 'Tuye', 'MrNothing'],
+        'pozemka3': ['Pozemka', 'Tuye', 'Quartz'],
+        'pozemka4': ['Pozemka', 'Tuye', 'Underflow'],
+        'shamare': ['Shamare', 'Firewhistle', 'Kirara'],
+        'shamare2': ['Shamare', 'Gummy', 'Kirara'],
+        'shamare3': ['Shamare', 'Gummy', 'Midnight'],
+        'texas': ['Texas', 'Lappland', 'Jaye'],
+        'exusiai': ['Exusiai', 'Lemuen', 'Underflow'],
+        'exusiai2': ['Exusiai', 'Lemuen', 'Kirara'],
+        'exusiai3': ['Exusiai', 'Lemuen', 'Jaye'],
+    }
+    
+    @classmethod
+    def get_worker_config(cls, worker_names: List[str]) -> List[Tuple[str, str]]:
+        """
+        Convert worker names to (category_icon, template_name) pairs.
+        
+        Args:
+            worker_names: List of worker names
+            
+        Returns:
+            List of (category_icon, template_name) tuples
+        """
+        config = []
+        for name in worker_names:
+            if name not in cls.WORKERS:
+                logger.warning(f"Worker '{name}' not found in configuration")
+                continue
+            category, template = cls.WORKERS[name]
+            config.append((cls.CATEGORIES[category], template))
+        return config
+    
+    @classmethod
+    def match_worker_set(cls, worker_names: List[str]) -> Optional[List[str]]:
+        """
+        Find which predefined set matches the given workers.
+        Returns the matched worker list (not the key) for direct use.
+        
+        Args:
+            worker_names: List of worker names to match
+            
+        Returns:
+            Matched worker list if found, None otherwise
+        """
+        worker_set = set(worker_names)
+        for set_key, set_workers in cls.WORKER_SETS.items():
+            if set(set_workers).issubset(worker_set):
+                return set_workers  # Return the list, not the key
+        return None
 
 
 class TradingPost:
@@ -206,88 +286,26 @@ class TradingPost:
         logger.warning(f"TP {self.id}: Could not find worker '{worker_name}' after {timeout_swipes} swipes")
         return False
 
-    def _select_workers_by_category(self, workers_config: List[Tuple[str, str]]):
+    def select_workers_by_names(self, worker_names: List[str]):
         """
-        Select workers by iterating through category and worker pairs.
-        Optimized: skips redundant category clicks when consecutive workers share same category.
+        Universal worker selection method using worker names.
+        Automatically handles category selection and optimization.
         
         Args:
-            workers_config: List of tuples (category_icon, worker_name)
+            worker_names: List of worker names to select (e.g., ['Proviso', 'Quartz', 'Tequila'])
         """
+        workers_config = WorkerConfig.get_worker_config(worker_names)
         self._prepare_worker_list()
         
         current_category = None
-        for category_icon, worker_name in workers_config:
+        for category_icon, worker_template in workers_config:
             time.sleep(0.15)
             # Only click category if it's different from the current one
             if category_icon != current_category:
                 click_template(category_icon)
                 current_category = category_icon
                 time.sleep(0.15)
-            self._scroll_and_tap_worker(worker_name)
-
-    def quick_select_tp_workers_proviso_quartz_tequila(self):
-        """Select Proviso, Quartz, and Tequila"""
-        workers = [
-            ("operator-categories-supporter-icon", "char-name-proviso"),
-            ("operator-categories-guard-icon", "char-name-quartz"),
-            ("operator-categories-guard-icon", "char-name-tequila"),  # Same category - optimized
-        ]
-        self._select_workers_by_category(workers)
-
-    def quick_select_tp_workers_pozemka_tuye_jaye(self):
-        """Select Pozemka, Tuye, and Jaye"""
-        workers = [
-            ("operator-categories-sniper-icon", "char-name-pozemka"),
-            ("operator-categories-medic-icon", "char-name-tuye"),
-            ("operator-categories-specialist-icon", "char-name-jaye"),
-        ]
-        self._select_workers_by_category(workers)
-
-    def quick_select_tp_workers_pozemka_tuye_mrnothing(self):
-        """Select Pozemka, Tuye, and Mr. Nothing"""
-        workers = [
-            ("operator-categories-sniper-icon", "char-name-pozemka"),
-            ("operator-categories-medic-icon", "char-name-tuye"),
-            ("operator-categories-specialist-icon", "char-name-mrnothing"),
-        ]
-        self._select_workers_by_category(workers)
-
-    def quick_select_tp_workers_shamare_firewhistle_kirara(self):
-        """Select Shamare, Firewhistle, and Kirara"""
-        workers = [
-            ("operator-categories-supporter-icon", "char-name-shamare"),
-            ("operator-categories-defender-icon", "char-name-firewhistle"),
-            ("operator-categories-specialist-icon", "char-name-kirara"),
-        ]
-        self._select_workers_by_category(workers)
-    
-    def quick_select_tp_workers_shamare_gummy_kirara(self):
-        """Select Shamare, Gummy, and Kirara"""
-        workers = [
-            ("operator-categories-supporter-icon", "char-name-shamare"),
-            ("operator-categories-defender-icon", "char-name-gummy"),
-            ("operator-categories-specialist-icon", "char-name-kirara"),
-        ]
-        self._select_workers_by_category(workers)
-    
-    def quick_select_tp_workers_texas_lappland_jaye(self):
-        """Select Texas, Lappland, and Jaye"""
-        workers = [
-            ("operator-categories-vanguard-icon", "char-name-texas"),
-            ("operator-categories-guard-icon", "char-name-lappland"),
-            ("operator-categories-specialist-icon", "char-name-jaye"),
-        ]
-        self._select_workers_by_category(workers)
-    
-    def quick_select_tp_workers_exusiai_midnight_gummy(self):
-        """Select Exusiai, Quartz, and Gummy"""
-        workers = [
-            ("operator-categories-sniper-icon", "char-name-exusiai"),
-            ("operator-categories-guard-icon", "char-name-midnight"),
-            ("operator-categories-defender-icon", "char-name-gummy"),
-        ]
-        self._select_workers_by_category(workers)
+            self._scroll_and_tap_worker(worker_template)
 
     def deselect_all_tp_workers(self):
         """Deselect all workers"""
@@ -335,7 +353,8 @@ class TradingPost:
             self.enter_TP_workers()
             self.save_tp_productivity_workers()
             self.deselect_all_tp_workers()
-            self.quick_select_tp_workers_proviso_quartz_tequila()
+            # Use the universal method with the curse worker set
+            self.select_workers_by_names(WorkerConfig.WORKER_SETS['proviso'])
             self.confirm_tp_workers()
             self.is_currently_cursed = True
             
@@ -361,21 +380,15 @@ class TradingPost:
             self.enter_TP_workers()
             self.deselect_all_tp_workers()
             
-            # Use optimized selection if workers match known sets
-            worker_set = set(self.productivity_workers)
-            if WorkerSet.POZEMKA_SET.issubset(worker_set):
-                self.quick_select_tp_workers_pozemka_tuye_jaye()
-            elif WorkerSet.POZEMKA_SET2.issubset(worker_set):
-                self.quick_select_tp_workers_pozemka_tuye_mrnothing()
-            elif WorkerSet.SHAMARE_SET.issubset(worker_set):
-                self.quick_select_tp_workers_shamare_firewhistle_kirara()
-            elif WorkerSet.SHAMARE_SET2.issubset(worker_set):
-                self.quick_select_tp_workers_shamare_gummy_kirara()
-            elif WorkerSet.TEXAS_SET.issubset(worker_set):
-                self.quick_select_tp_workers_texas_lappland_jaye()
-            elif WorkerSet.EXUSIAI_SET.issubset(worker_set):
-                self.quick_select_tp_workers_exusiai_midnight_gummy()
+            # Try to match saved workers with a predefined set (using set comparison)
+            matched_workers = WorkerConfig.match_worker_set(self.productivity_workers)
+            
+            if matched_workers:
+                logger.info(f"TP {self.id}: Matched predefined worker set: {matched_workers}")
+                self.select_workers_by_names(matched_workers)
             else:
+                # Fallback to OCR-based selection
+                logger.info(f"TP {self.id}: No predefined set matched, using OCR")
                 for worker in self.productivity_workers:
                     self.select_tp_worker_by_text_ocr(worker)
         

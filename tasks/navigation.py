@@ -139,7 +139,8 @@ def reach_base_left_side() -> bool:
     reach_base()
     logger.debug("Positioning on base left side")
     swipe_right()
-    time.sleep(1)
+    swipe_right()
+    time.sleep(0.5)
     return True
 
 
