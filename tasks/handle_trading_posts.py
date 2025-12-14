@@ -87,16 +87,16 @@ class WorkerConfig:
     # Predefined worker sets for productivity (uncurse) operations
     WORKER_SETS = (
         ('Pozemka', 'Tuye', 'Jaye'),
-        ('Pozemka', 'Tuye', 'MrNothing'),
-        ('Pozemka', 'Tuye', 'Quartz'),
-        ('Pozemka', 'Tuye', 'Underflow'),
         ('Shamare', 'Firewhistle', 'Kirara'),
         ('Shamare', 'Gummy', 'Kirara'),
+        ('Exusiai', 'Lemuen', 'Underflow'),
+        ('Pozemka', 'Tuye', 'MrNothing'),
+        ('Exusiai', 'Lemuen', 'Kirara'),
+        ('Pozemka', 'Tuye', 'Quartz'),
+        ('Pozemka', 'Tuye', 'Underflow'),
+        ('Exusiai', 'Lemuen', 'Jaye'),
         ('Shamare', 'Gummy', 'Midnight'),
         ('Texas', 'Lappland', 'Jaye'),
-        ('Exusiai', 'Lemuen', 'Underflow'),
-        ('Exusiai', 'Lemuen', 'Kirara'),
-        ('Exusiai', 'Lemuen', 'Jaye'),
     )
     
     @classmethod
