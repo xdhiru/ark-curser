@@ -42,7 +42,7 @@ def handle_trading_posts():
     tp_matches_list = find_trading_posts()    
     for match in tp_matches_list:
         TradingPost(match["x"], match["y"])
-        reach_base_left_side()
+        reach_base()
     logger.info("Trading posts initialized. Starting cursing protocol...")
     TradingPost.initiate_cursing_protocol()
 
