@@ -35,8 +35,9 @@ if CURRENTLY_TESTING:
 
 def handle_trading_posts():
     """Main handler for processing trading posts"""
-    logger.info("=" * 45, "\nInitializing trading posts...", "=" * 45)
-    
+    logger.info("=" * 45)
+    logger.info("Initializing trading posts...")
+    logger.info("=" * 45)
     reach_base_left_side()
     
     for match in find_trading_posts():
@@ -48,10 +49,10 @@ def handle_trading_posts():
 
 
 class WorkerConfig:
-    """Centralized worker configuration with optimized lookups"""
+    """Centralized worker configuration"""
     
     # Worker mappings: name -> (category, template_name)
-    _WORKER_CONFIGS = {
+    WORKERS = {
         'Proviso': ('supporter', 'char-name-proviso'),
         'Quartz': ('guard', 'char-name-quartz'),
         'Tequila': ('guard', 'char-name-tequila'),
@@ -71,55 +72,8 @@ class WorkerConfig:
         'Underflow': ('defender', 'char-name-underflow'),
     }
     
-    # Curse worker set - used during curse operations (with order!)
+    # Curse worker set - used during curse operations
     CURSE_WORKERS = ('Proviso', 'Quartz', 'Tequila')
-    
-    # Predefined worker sets as tuples (preserves order for selection)
-    WORKER_SETS = (
-        ('Pozemka', 'Tuye', 'Jaye'),
-        ('Shamare', 'Firewhistle', 'Kirara'),
-        ('Shamare', 'Gummy', 'Kirara'),
-        ('Exusiai', 'Lemuen', 'Underflow'),
-        ('Pozemka', 'Tuye', 'MrNothing'),
-        ('Exusiai', 'Lemuen', 'Kirara'),
-        ('Pozemka', 'Tuye', 'Quartz'),
-        ('Pozemka', 'Tuye', 'Underflow'),
-        ('Exusiai', 'Lemuen', 'Jaye'),
-        ('Shamare', 'Gummy', 'Midnight'),
-        ('Texas', 'Lappland', 'Jaye'),
-    )
-    
-    _CATEGORY_ICON_CACHE = {}  # Cache for category icons
-    
-    @classmethod
-    def get_worker_configs(cls, worker_names: Iterable[str]) -> List[Tuple[str, str]]:
-        """Convert worker names to (category_icon, template_name) pairs"""
-        configs = []
-        for name in worker_names:
-            if worker_config := cls._WORKER_CONFIGS.get(name):
-                category, template = worker_config
-                category_icon = cls._get_category_icon(category)
-                configs.append((category_icon, template))
-            else:
-                logger.warning(f"Worker '{name}' not found in configuration")
-        return configs
-    
-    @classmethod
-    def find_matching_worker_set(cls, worker_names: List[str]) -> Optional[Tuple[str, ...]]:
-        """Find which predefined set matches the given workers (order doesn't matter)."""
-        input_set = set(worker_names)  # Convert once
-        
-        for worker_tuple in cls.WORKER_SETS:
-            if set(worker_tuple).issubset(input_set):
-                return worker_tuple  # Returns tuple in predefined order
-        return None
-    
-    @classmethod
-    def _get_category_icon(cls, category: str) -> str:
-        """Get category icon with caching"""
-        if category not in cls._CATEGORY_ICON_CACHE:
-            cls._CATEGORY_ICON_CACHE[category] = f"operator-categories-{category.lower()}-icon"
-        return cls._CATEGORY_ICON_CACHE[category]
 
 
 class TradingPost:
@@ -137,6 +91,8 @@ class TradingPost:
     )
     _ORDER_TIMER_REGION = SCREEN_COORDS['order_timer_scan_region']
     _TP_WORKERS_BUTTON = SCREEN_COORDS['tp_workers_entry_button']
+    
+    # ========== INITIALIZATION METHODS ==========
     
     def __init__(self, x: int, y: int):
         self.x = x
@@ -161,6 +117,8 @@ class TradingPost:
         self._update_execution_time()
         self._schedule_curse()
         logger.debug(f"TradingPost {self.id} initialized with first curse at {self.execution_time}")
+    
+    # ========== NAVIGATION METHODS ==========
     
     @contextmanager
     def _ensure_inside_tp(self, max_retries: int = 3, interval: float = 1.0):
@@ -197,6 +155,8 @@ class TradingPost:
         time.sleep(1)
         return read_timer_from_region(*self._ORDER_TIMER_REGION)
     
+    # ========== SCHEDULING METHODS ==========
+    
     def _update_execution_time(self):
         """Update the timer and calculate next execution time"""
         with self._ensure_inside_tp() as inside_tp:
@@ -219,13 +179,7 @@ class TradingPost:
         heapq.heappush(self._curse_uncurse_queue, (uncurse_time, self, False))
         logger.debug(f"TP {self.id}: Scheduled uncurse task at {uncurse_time}")
     
-    def _collect_orders(self):
-        """Collect ready orders if available"""
-        try:
-            click_template("tp-order-ready-to-deliver")
-            time.sleep(1)
-        except Exception:
-            logger.info(f"TP {self.id}: No ready orders to collect")
+    # ========== WORKER MANAGEMENT METHODS ==========
     
     def _save_productivity_workers(self):
         """Save current productivity workers"""
@@ -236,7 +190,7 @@ class TradingPost:
         logger.info(f"TP {self.id}: Saved workers: {self.productivity_workers}")
     
     @staticmethod
-    def _prepare_worker_list():
+    def _sort_workers_by_skill():
         """Prepare worker list with common sorting and filtering"""
         click_template("worker-list-sort-by-trust")
         time.sleep(0.15)
@@ -245,8 +199,8 @@ class TradingPost:
     
     def _find_and_select_worker_by_text(self, worker_name: str, max_swipes: int = 40) -> bool:
         """Select a worker using OCR text recognition"""
-        self._prepare_worker_list()
-        
+        self._sort_workers_by_skill()
+
         # Reset category filters
         for icon in ["operator-categories-all-icon", 
                      "operator-categories-supporter-icon",
@@ -282,24 +236,28 @@ class TradingPost:
         return False
     
     def _select_workers(self, worker_names: Iterable[str]):
-        """
-        Universal worker selection method using worker names.
-        Optimized to minimize category switching.
-        """
-        worker_configs = WorkerConfig.get_worker_configs(worker_names)
-        self._prepare_worker_list()
-        
+        """Select workers with category tracking to minimize switching"""
+        self._sort_workers_by_skill()        
         current_category = None
-        for category_icon, worker_template in worker_configs:
-            time.sleep(0.15)
-            
-            # Only switch category if necessary
-            if category_icon != current_category:
-                click_template(category_icon)
-                current_category = category_icon
-                time.sleep(0.15)
-            
-            self._find_and_select_worker_by_template(worker_template)
+        for worker_name in worker_names:
+            if worker_config := WorkerConfig.WORKERS.get(worker_name):
+                # Worker is in dictionary - use template matching
+                category, template_name = worker_config
+                category_icon = f"operator-categories-{category.lower()}-icon"
+                
+                # Only switch category if necessary
+                if category_icon != current_category:
+                    click_template(category_icon)
+                    current_category = category_icon
+                    time.sleep(0.15)
+                
+                self._find_and_select_worker_by_template(template_name)
+            else:
+                # Worker not in dictionary - use OCR search
+                logger.info(f"TP {self.id}: Worker '{worker_name}' not in config, using OCR")
+                self._find_and_select_worker_by_text(worker_name)
+                # After OCR, we're back in "all categories" with prepared list
+                current_category = None
     
     def _deselect_all_workers(self):
         """Deselect all workers"""
@@ -310,6 +268,16 @@ class TradingPost:
         click_template("tp-workers-confirm-button")
         if find_template("tp-workers-shift-confirmation-prompt"):
             click_template("tp-workers-shift-confirmation-confirm")
+    
+    # ========== ORDER & DRONE METHODS ==========
+    
+    def _collect_orders(self):
+        """Collect ready orders if available"""
+        try:
+            click_template("tp-order-ready-to-deliver")
+            time.sleep(1)
+        except Exception:
+            logger.info(f"TP {self.id}: No ready orders to collect")
     
     def _use_drones(self) -> bool:
         """Use drones on the trading post"""
@@ -336,6 +304,8 @@ class TradingPost:
             time.sleep(1)
             return True
     
+    # ========== MAIN CURSE/UNCURSE METHODS ==========
+    
     def curse(self, use_drones: bool = False):
         """Perform curse task - assign special workers"""
         logger.info(f"TP {self.id}: Curse task (drones={use_drones})")
@@ -349,8 +319,6 @@ class TradingPost:
             self._enter_workers_section()
             self._save_productivity_workers()
             self._deselect_all_workers()
-            
-            # Assign curse workers (in predefined order)
             self._select_workers(WorkerConfig.CURSE_WORKERS)
             self._confirm_worker_selection()
             self.is_cursed = True
@@ -379,19 +347,7 @@ class TradingPost:
             
             self._enter_workers_section()
             self._deselect_all_workers()
-            
-            # Try to match with predefined worker set (returns ordered tuple)
-            worker_tuple = WorkerConfig.find_matching_worker_set(self.productivity_workers)
-            
-            if worker_tuple:
-                logger.info(f"TP {self.id}: Using predefined set: {worker_tuple}")
-                self._select_workers(worker_tuple)  # Select in predefined order
-            else:
-                # Fallback to OCR-based selection
-                logger.info(f"TP {self.id}: Using OCR selection")
-                for worker in self.productivity_workers:
-                    self._find_and_select_worker_by_text(worker)
-            
+            self._select_workers(self.productivity_workers)
             self._confirm_worker_selection()
             self.productivity_workers.clear()
             self.is_cursed = False
@@ -400,6 +356,8 @@ class TradingPost:
         
         duration = time.time() - start_time
         logger.info(f"TP {self.id}: Uncurse completed in {duration:.1f}s")
+    
+    # ========== SCHEDULING PROTOCOL METHODS ==========
     
     @classmethod
     def _should_use_drones_for_curse(cls, execution_time: float) -> bool:
@@ -445,7 +403,7 @@ class TradingPost:
     def initiate_cursing_protocol(cls):
         """Main loop for processing curse/uncurse tasks"""
         logger.info("=" * 45)
-        logger.info(f"Cursing Protocol: Buffer={CURSE_EXECUTION_BUFFER}s, Conflict={CURSE_CONFLICT_THRESHOLD}s")
+        logger.info(f"Cursing Protocol: Buffer={CURSE_EXECUTION_BUFFER}s, Conflict Threshold={CURSE_CONFLICT_THRESHOLD}s")
         logger.info("=" * 45)
         
         while True:
