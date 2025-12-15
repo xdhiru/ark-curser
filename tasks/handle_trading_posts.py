@@ -35,13 +35,15 @@ if CURRENTLY_TESTING:
 
 def handle_trading_posts():
     """Main handler for processing trading posts"""
+    logger.info("=============================================")
     logger.info("Initializing trading posts...")
+    logger.info("=============================================")
     reach_base_left_side()
     tp_matches_list = find_trading_posts()    
     for match in tp_matches_list:
         TradingPost(match["x"], match["y"])
         reach_base_left_side()
-    logger.info("Trading posts initialized. Starting curse protocol...")
+    logger.info("Trading posts initialized. Starting cursing protocol...")
     TradingPost.initiate_cursing_protocol()
 
 @dataclass
@@ -463,7 +465,9 @@ class TradingPost:
     @classmethod
     def initiate_cursing_protocol(cls):
         """Main loop for processing curse/uncurse tasks"""
-        logger.info(f"Cursing protocol initiated: buffer={CURSE_EXECUTION_BUFFER}s, conflict_threshold={CURSE_CONFLICT_THRESHOLD}s")
+        logger.info("=============================================")
+        logger.info(f"Initiated Cursing Protocol: [Buffer={CURSE_EXECUTION_BUFFER}s, Conflict_threshold={CURSE_CONFLICT_THRESHOLD}s]")
+        logger.info("=============================================")
         while True:
             try:
                 if not cls.curse_uncurse_queue:
