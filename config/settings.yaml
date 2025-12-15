@@ -8,7 +8,7 @@ adb_path: "C:/platform-tools/adb.exe"
 screenshot_path: "Screenshots/screen.png"
 template_path: "Templates/"
 device_ip: "127.0.0.1:5555"
-use_gpu: true
+use_gpu: false #change it to true if you want to use nvidia gpu for EasyOCR
 
 
 # Fine-tunable static Values 
