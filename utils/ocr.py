@@ -53,7 +53,7 @@ def read_timer_from_region(x1: int, y1: int, x2: int, y2: int) -> Optional[int]:
     
     # Combine and clean OCR results
     raw_text = "".join(texts)
-    logger.info(f"Raw OCR timer text: {raw_text}")
+    logger.debug(f"Raw OCR timer text: {raw_text}")
     
     cleaned_text = re.sub(r'[^0-9]', '', raw_text)
     
@@ -93,7 +93,7 @@ def read_text_from_region(x1: int, y1: int, x2: int, y2: int) -> Optional[str]:
     raw_text = "".join(texts)
     clean_text = re.sub(r'[^A-Za-z0-9]', '', raw_text)
     
-    logger.info(f"OCR text extracted: {clean_text}")
+    logger.debug(f"OCR text extracted: {clean_text}")
     return clean_text
 
 
@@ -157,7 +157,7 @@ def find_text_coordinates(target_text: str, confidence_threshold: float = 0.6) -
                 best_matches.append((center_x, center_y))
     
     if best_matches:
-        logger.info(f"Found '{target_text}' with similarity {highest_similarity:.2f}: {best_matches}")
+        logger.debug(f"Found '{target_text}' with similarity {highest_similarity:.2f}: {best_matches}")
     else:
         logger.debug(f"Text '{target_text}' not found (threshold: {confidence_threshold})")
     
