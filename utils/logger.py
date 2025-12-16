@@ -1,6 +1,5 @@
-
 """
-Centralized logging configuration for the cursingbot project.
+Centralized logging configuration for the ark_curser project.
 All modules should import and use the logger from this module.
 """
 
@@ -13,7 +12,7 @@ LOGS_DIR = Path(__file__).resolve().parents[1] / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
 # Configure logger
-logger = logging.getLogger("cursingbot")
+logger = logging.getLogger("ark_curser")
 logger.setLevel(logging.DEBUG)
 logger.propagate = False  # Prevent duplicate logs
 
@@ -29,7 +28,7 @@ if not logger.handlers:
     logger.addHandler(console_handler)
 
     # File handler (DEBUG level) - for detailed debugging
-    file_handler = logging.FileHandler(LOGS_DIR / "cursingbot.log")
+    file_handler = logging.FileHandler(LOGS_DIR / "ark_curser.log")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",

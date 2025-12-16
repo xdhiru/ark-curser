@@ -1,13 +1,22 @@
-from tasks.navigation import *
-from utils.ocr import *
-from utils.adb import *
-from utils.logger import logger
-from utils.time_helper import get_ist_time_and_remaining
+"""
+Trading post management with curse/uncurse scheduling.
+"""
+
+from .navigation import *  # CHANGED: relative import
+from utils.ocr import read_text_from_region, read_timer_from_region, find_text_coordinates  # KEPT: absolute import
+from utils.ocr import read_text_from_image, read_timer_from_image  # KEPT: absolute import
+from utils.adb import adb_tap, get_cached_screenshot  # KEPT: absolute import
+from utils.adb import swipe_right, slow_swipe_left  # KEPT: absolute import
+from utils.logger import logger  # KEPT: absolute import
+from utils.time_helper import get_ist_time_and_remaining  # KEPT: absolute import
+from utils.vision import find_template_in_image  # KEPT: absolute import
+from utils.click_helper import click_template as click_helper_template  # KEPT: absolute import
 import time
 import heapq
 import yaml
 from typing import List, Tuple, Optional, Set, Iterable
 from contextlib import contextmanager
+import numpy as np
 
 # Load configuration once at module level
 with open('config/settings.yaml', 'r') as f:
@@ -79,9 +88,9 @@ class WorkerConfig:
 class TradingPost:
     """Represents a trading post with curse/uncurse scheduling"""
     
-    _instances = []  # Use a list instead of static attribute
+    _instances = []
     _instance_count = 0
-    _curse_uncurse_queue = []  # Use private attribute
+    _curse_uncurse_queue = []
     
     # Screen coordinate constants
     _WORKER_REGIONS = (
@@ -139,7 +148,7 @@ class TradingPost:
         logger.debug(f"TP {self.id}: Entering trading post at ({self.x}, {self.y})")
         adb_tap(self.x, self.y)
         time.sleep(1)
-        click_template("tp-entry-arrow")
+        click_helper_template("tp-entry-arrow")
         time.sleep(0.5)
     
     def _enter_workers_section(self) -> bool:
@@ -150,7 +159,7 @@ class TradingPost:
         time.sleep(1)
         return True
     
-    def _scan_timer(self) -> int:
+    def _scan_timer(self) -> Optional[int]:
         """Scan and return the order timer in seconds"""
         time.sleep(1)
         return read_timer_from_region(*self._ORDER_TIMER_REGION)
@@ -163,18 +172,30 @@ class TradingPost:
             if not inside_tp:
                 logger.error(f"TP {self.id}: Cannot update execution time - not inside TP")
                 return False
-            self.execution_time = time.time() + self._scan_timer()
+            timer_value = self._scan_timer()
+            if timer_value is None:
+                logger.error(f"TP {self.id}: Failed to read timer")
+                return False
+            self.execution_time = time.time() + timer_value
             ist_time, remaining_str = get_ist_time_and_remaining(self.execution_time)
             logger.info(f"TP {self.id}: Next execution at {ist_time} (in {remaining_str})")
+            return True
+        return False
     
     def _schedule_curse(self, prelay: int = 40):
         """Schedule a curse task"""
+        if self.execution_time <= 0:
+            logger.error(f"TP {self.id}: Cannot schedule curse without valid execution time")
+            return
         curse_time = self.execution_time - prelay
         heapq.heappush(self._curse_uncurse_queue, (curse_time, self, True))
         logger.debug(f"TP {self.id}: Scheduled curse task at {curse_time}")
     
     def _schedule_uncurse(self, delay: int = 10):
         """Schedule an uncurse task"""
+        if self.execution_time <= 0:
+            logger.error(f"TP {self.id}: Cannot schedule uncurse without valid execution time")
+            return
         uncurse_time = self.execution_time + delay
         heapq.heappush(self._curse_uncurse_queue, (uncurse_time, self, False))
         logger.debug(f"TP {self.id}: Scheduled uncurse task at {uncurse_time}")
@@ -183,18 +204,26 @@ class TradingPost:
     
     def _save_productivity_workers(self):
         """Save current productivity workers"""
-        self.productivity_workers = [
-            read_text_from_region(*region) 
-            for region in self._WORKER_REGIONS
-        ]
+        self.productivity_workers = []
+        
+        # Get fresh screenshot for OCR
+        screenshot = get_cached_screenshot()
+        if screenshot is None:
+            logger.error(f"TP {self.id}: Failed to get screenshot for worker reading")
+            return
+        
+        for region in self._WORKER_REGIONS:
+            worker_text = read_text_from_image(screenshot, *region)
+            self.productivity_workers.append(worker_text if worker_text else "Unknown")
+        
         logger.info(f"TP {self.id}: Saved workers: {self.productivity_workers}")
     
     @staticmethod
     def _sort_workers_by_skill():
         """Prepare worker list with common sorting and filtering"""
-        click_template("worker-list-sort-by-trust")
+        click_helper_template("worker-list-sort-by-trust")
         time.sleep(0.15)
-        click_template("worker-list-sort-by-skill")
+        click_helper_template("worker-list-sort-by-skill")
         time.sleep(0.15)
     
     def _find_and_select_worker_by_text(self, worker_name: str, max_swipes: int = 40) -> bool:
@@ -205,12 +234,13 @@ class TradingPost:
         for icon in ["operator-categories-all-icon", 
                      "operator-categories-supporter-icon",
                      "operator-categories-all-icon"]:
-            click_template(icon)
+            click_helper_template(icon)
             time.sleep(0.15)
         
         for swipe_count in range(max_swipes):
-            if coords := find_text_coordinates(worker_name):
-                adb_tap(coords)
+            coords = find_text_coordinates(worker_name)
+            if coords:
+                adb_tap(coords[0])
                 return True
             
             slow_swipe_left()
@@ -226,8 +256,12 @@ class TradingPost:
     def _find_and_select_worker_by_template(self, template_name: str, max_swipes: int = 25) -> bool:
         """Helper to search for and tap a worker using template matching"""
         for _ in range(max_swipes):
-            if coords := find_template(template_name):
-                click_template(coords)
+            screenshot = get_cached_screenshot()
+            if screenshot is None:
+                continue
+            matches = find_template_in_image(screenshot, template_name)
+            if matches:
+                adb_tap(matches[0]["x"], matches[0]["y"])
                 logger.debug(f"TP {self.id}: Selected worker '{template_name}'")
                 return True
             slow_swipe_left()
@@ -247,7 +281,7 @@ class TradingPost:
                 
                 # Only switch category if necessary
                 if category_icon != current_category:
-                    click_template(category_icon)
+                    click_helper_template(category_icon)
                     current_category = category_icon
                     time.sleep(0.15)
                 
@@ -261,20 +295,24 @@ class TradingPost:
     
     def _deselect_all_workers(self):
         """Deselect all workers"""
-        click_template("tp-workers-deselect-all-button")
+        click_helper_template("tp-workers-deselect-all-button")
     
     def _confirm_worker_selection(self):
         """Confirm worker selection"""
-        click_template("tp-workers-confirm-button")
-        if find_template("tp-workers-shift-confirmation-prompt"):
-            click_template("tp-workers-shift-confirmation-confirm")
+        click_helper_template("tp-workers-confirm-button")
+        # Check for confirmation prompt
+        screenshot = get_cached_screenshot()
+        if screenshot is not None:
+            matches = find_template_in_image(screenshot, "tp-workers-shift-confirmation-prompt")
+            if matches:
+                adb_tap(matches[0]["x"], matches[0]["y"])
     
     # ========== ORDER & DRONE METHODS ==========
     
     def _collect_orders(self):
         """Collect ready orders if available"""
         try:
-            click_template("tp-order-ready-to-deliver")
+            click_helper_template("tp-order-ready-to-deliver")
             time.sleep(1)
         except Exception:
             logger.info(f"TP {self.id}: No ready orders to collect")
@@ -288,7 +326,7 @@ class TradingPost:
                 logger.error(f"TP {self.id}: Not inside TP")
                 return False
             
-            if not click_template("tp-use-drones-icon"):
+            if not click_helper_template("tp-use-drones-icon"):
                 logger.error(f"TP {self.id}: Drone icon not found")
                 return False
             
@@ -296,11 +334,11 @@ class TradingPost:
                 "tp-use-drones-max-icon",
                 "tp-use-drones-confirm-button"
             ]:
-                click_template(action)
+                click_helper_template(action)
                 time.sleep(0.15)
             
             logger.info(f"TP {self.id}: Drones used successfully")
-            time.sleep(2)
+            time.sleep(1.5)
             return True
     
     # ========== MAIN CURSE/UNCURSE METHODS ==========
@@ -328,8 +366,8 @@ class TradingPost:
                 self._collect_orders()
                 self.uncurse()
             else:
-                self._update_execution_time()
-                self._schedule_uncurse()
+                if self._update_execution_time():
+                    self._schedule_uncurse()
         
         duration = time.time() - start_time
         logger.info(f"TP {self.id}: Curse completed in {duration:.1f}s")
@@ -350,8 +388,8 @@ class TradingPost:
             self._confirm_worker_selection()
             self.productivity_workers.clear()
             self.is_cursed = False
-            self._update_execution_time()
-            self._schedule_curse()
+            if self._update_execution_time():
+                self._schedule_curse()
         
         duration = time.time() - start_time
         logger.info(f"TP {self.id}: Uncurse completed in {duration:.1f}s")

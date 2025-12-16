@@ -1,3 +1,7 @@
+"""
+Time utility functions for IST timezone conversions.
+"""
+
 import datetime
 import time
 from typing import Tuple
@@ -22,7 +26,7 @@ def get_ist_time_and_remaining(epoch_time: float) -> Tuple[str, str]:
     
     # Convert to IST
     ist_time = datetime.datetime.fromtimestamp(epoch_time, _IST_TIMEZONE)
-    formatted_time = ist_time.strftime("%I:%M %p")
+    formatted_time = ist_time.strftime("%I:%M %p").lstrip("0")
     
     # Calculate time remaining
     remaining_seconds = abs(int(time_difference))

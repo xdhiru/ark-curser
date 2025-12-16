@@ -1,32 +1,32 @@
-cursingbot/
+# Ark Curser - Automation Bot
+
+## Project Structure
+
+ark-curser/
 │
-├── main.py                 # Main entry point - initializes app and runs handle_trading_posts
-├── screenshot.py           # Utility to capture screenshots manually
-├── requirements.txt        # Python dependencies (easyocr, pyyaml, opencv, etc)
+├── main.py                 # Main application entry point - initializes ark_curser and orchestrates tasks
+├── screenshot.py           # Utility script for manual screenshot capture and debugging
+├── requirements.txt        # Python dependencies (easyocr, pyyaml, opencv-python, numpy, etc)
+├── README.md               # Project documentation and setup instructions
 │
-├── utils/
-│   ├── adb.py              # ADB device communication (tap, swipe, screenshot)
-│   ├── vision.py           # Template matching and image detection
-│   ├── ocr.py              # OCR for timer scanning and text extraction
-│   ├── logger.py           # Centralized logging (console INFO+, file DEBUG+)
-│   ├── time_helper.py      # IST time formatting and remaining time calculation
-│   └── __pycache__/
+├── utils/                  # Core utility modules
+│   ├── adb.py              # ADB device communication (tap, swipe, screenshot, device status)
+│   ├── vision.py           # Template matching and image detection using OpenCV
+│   ├── ocr.py              # OCR operations for timer scanning and text extraction (EasyOCR)
+│   ├── logger.py           # Centralized logging system (console INFO+, file DEBUG+)
+│   ├── time_helper.py      # IST time formatting, remaining time calculation, and scheduling
+│   ├── config_loader.py    # YAML configuration loader and validator
+│   └── __init__.py         # Package initialization
 │
-├── tasks/
+├── tasks/                  # Automation task modules
 │   ├── navigation.py       # Screen navigation (reach_home, reach_base, find_trading_posts)
 │   ├── handle_trading_posts.py  # TradingPost class and cursing protocol orchestration
-│   └── __pycache__/
+│   └── __init__.py         # Package initialization
 │
-├── config/
-│   ├── settings.yaml       # Screen coordinates, paths, GPU settings
-│   └── user_templates/     # User customisable template images, takes precedence over core templates (/Templates/)
-│
-├── logs/                   # Auto-generated runtime logs
-├── Screenshots/            # Screenshot storage directory
-├── Templates/              # Template storage for image matching
-│
-├── LOGGING_IMPLEMENTATION.md    # Logging system documentation
-├── LOGGING_COMPLETION.md        # Logging completion checklist
-├── LOGGING_QUICK_REF.md         # Quick reference for logger usage
-│
-└── project_structure.txt               # Project notes and structure (this file)
+├── logs/
+│   └── ark_curser.log
+│    
+└── config/                 # Configuration management
+    ├── settings.yaml       # Main configuration (screen coordinates, paths, GPU settings, timeouts)
+    └── user_templates/     # User-customizable template images (overrides core templates)
+
