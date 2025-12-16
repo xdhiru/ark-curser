@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Optional, List, Tuple, Union
 import cv2
 import numpy as np
-from .config_loader import get_config_value  # CHANGED: relative import
-from .logger import logger  # CHANGED: relative import
+from .config_loader import get_config_value
+from .logger import logger
 
 # Configuration
 ADB_PATH = get_config_value("adb_path")

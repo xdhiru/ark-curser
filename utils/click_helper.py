@@ -4,9 +4,9 @@ Helper functions for common click patterns with screenshot caching.
 
 from typing import Optional, Dict, List, Union
 import time
-from .adb import adb_tap, get_cached_screenshot  # CHANGED: relative import
-from .vision import find_template_in_image  # CHANGED: relative import
-from .logger import logger  # CHANGED: relative import
+from .adb import adb_tap, get_cached_screenshot
+from .vision import find_template_in_image
+from .logger import logger
 
 
 def click_template(

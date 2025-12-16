@@ -9,9 +9,9 @@ import numpy as np
 from pathlib import Path
 from typing import Optional, List, Tuple
 from difflib import SequenceMatcher
-from .config_loader import get_config_value  # CHANGED: relative import
-from .adb import get_cached_screenshot  # CHANGED: relative import
-from .logger import logger  # CHANGED: relative import
+from .config_loader import get_config_value
+from .adb import get_cached_screenshot
+from .logger import logger
 
 # Configuration
 USE_GPU = get_config_value("use_gpu", False)

@@ -2,11 +2,11 @@
 Navigation utilities for screen navigation and location verification.
 """
 
-from utils.adb import adb_tap, swipe_left, swipe_right, get_cached_screenshot  # CHANGED: relative import
-from utils.vision import find_template, find_template_in_image  # CHANGED: relative import
-from utils.ocr import find_text_coordinates  # CHANGED: relative import
-from utils.click_helper import click_template as click_helper_template  # CHANGED: relative import
-from utils.logger import logger  # CHANGED: relative import
+from utils.adb import adb_tap, swipe_left, swipe_right, get_cached_screenshot
+from utils.vision import find_template, find_template_in_image
+from utils.ocr import find_text_coordinates
+from utils.click_helper import click_template as click_helper_template
+from utils.logger import logger
 from typing import Optional, List, Dict, Callable, Union
 import time
 

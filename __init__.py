@@ -1,5 +1,5 @@
 """
- - Arknights Trading Post Automation Bot
+ark-curser - Arknights Trading Post Automation Bot
 """
 
 __version__ = "1.0.0"

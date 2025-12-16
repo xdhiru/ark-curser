@@ -2,15 +2,15 @@
 Trading post management with curse/uncurse scheduling.
 """
 
-from .navigation import *  # CHANGED: relative import
-from utils.ocr import read_text_from_region, read_timer_from_region, find_text_coordinates  # KEPT: absolute import
-from utils.ocr import read_text_from_image, read_timer_from_image  # KEPT: absolute import
-from utils.adb import adb_tap, get_cached_screenshot  # KEPT: absolute import
-from utils.adb import swipe_right, slow_swipe_left  # KEPT: absolute import
-from utils.logger import logger  # KEPT: absolute import
-from utils.time_helper import get_ist_time_and_remaining  # KEPT: absolute import
-from utils.vision import find_template_in_image  # KEPT: absolute import
-from utils.click_helper import click_template as click_helper_template  # KEPT: absolute import
+from .navigation import *
+from utils.ocr import read_text_from_region, read_timer_from_region, find_text_coordinates
+from utils.ocr import read_text_from_image, read_timer_from_image
+from utils.adb import adb_tap, get_cached_screenshot
+from utils.adb import swipe_right, slow_swipe_left
+from utils.logger import logger
+from utils.time_helper import get_ist_time_and_remaining
+from utils.vision import find_template_in_image
+from utils.click_helper import click_template as click_helper_template
 import time
 import heapq
 import yaml
