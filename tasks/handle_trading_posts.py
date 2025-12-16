@@ -288,12 +288,11 @@ class TradingPost:
                 logger.error(f"TP {self.id}: Not inside TP")
                 return False
             
-            if not find_template("tp-use-drones-icon"):
+            if not click_template("tp-use-drones-icon"):
                 logger.error(f"TP {self.id}: Drone icon not found")
                 return False
             
             for action in [
-                "tp-use-drones-icon",
                 "tp-use-drones-max-icon",
                 "tp-use-drones-confirm-button"
             ]:
@@ -301,7 +300,7 @@ class TradingPost:
                 time.sleep(0.15)
             
             logger.info(f"TP {self.id}: Drones used successfully")
-            time.sleep(1)
+            time.sleep(2)
             return True
     
     # ========== MAIN CURSE/UNCURSE METHODS ==========
