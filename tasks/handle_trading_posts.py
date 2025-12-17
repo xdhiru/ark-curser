@@ -351,7 +351,7 @@ class TradingPost:
         with self._ensure_inside_tp() as inside_tp:
             if not inside_tp:
                 logger.error(f"TP {self.id}: Cannot curse - not inside TP")
-                return
+                return False
             
             self._enter_workers_section()
             self._save_productivity_workers()
@@ -364,14 +364,19 @@ class TradingPost:
                 logger.info(f"TP {self.id}: Using drones and immediate uncurse")
                 self._use_drones()
                 self._collect_orders()
-                self.uncurse()
+                duration = time.time() - start_time
+                logger.info(f"TP {self.id}: Curse completed in {duration:.1f}s with droning")
+                return self.uncurse()
             else:
                 if self._update_execution_time():
                     self._schedule_uncurse()
-        
-        duration = time.time() - start_time
-        logger.info(f"TP {self.id}: Curse completed in {duration:.1f}s")
-    
+                    duration = time.time() - start_time
+                    logger.info(f"TP {self.id}: Curse completed in {duration:.1f}s")
+                    return True
+                else:
+                    logger.error(f"TP {self.id}: Curse failed – execution time update failed")
+                    return False
+                    
     def uncurse(self):
         """Perform uncurse task - restore original workers"""
         logger.info(f"TP {self.id}: Uncurse task")
@@ -380,7 +385,7 @@ class TradingPost:
         with self._ensure_inside_tp() as inside_tp:
             if not inside_tp:
                 logger.error(f"TP {self.id}: Cannot uncurse - not inside TP")
-                return
+                return False
             
             self._enter_workers_section()
             self._deselect_all_workers()
@@ -390,9 +395,12 @@ class TradingPost:
             self.is_cursed = False
             if self._update_execution_time():
                 self._schedule_curse()
-        
-        duration = time.time() - start_time
-        logger.info(f"TP {self.id}: Uncurse completed in {duration:.1f}s")
+                duration = time.time() - start_time
+                logger.info(f"TP {self.id}: Uncurse completed in {duration:.1f}s")
+                return True
+            else:
+                logger.error(f"TP {self.id}: Uncurse failed – execution time update failed")
+                return False
     
     # ========== SCHEDULING PROTOCOL METHODS ==========
     
@@ -419,7 +427,7 @@ class TradingPost:
             
             if is_curse:
                 use_drones = cls._should_use_drones_for_curse(scheduled_time)
-                trading_post.curse(use_drones)
+                return trading_post.curse(use_drones)
             else:
                 # Wait until exact execution time for uncurse
                 wait_time = max(0, scheduled_time - time.time())
@@ -431,10 +439,11 @@ class TradingPost:
                     logger.info(f"Waiting {wait_time:.1f}s before uncurse")
                     time.sleep(wait_time)
                 
-                trading_post.uncurse()
+                return trading_post.uncurse()
                 
         except Exception as e:
             logger.error(f"Error executing {task_type} for TP {trading_post.id}: {e}", exc_info=True)
+            return False
     
     @classmethod
     def initiate_cursing_protocol(cls):
