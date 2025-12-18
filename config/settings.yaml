@@ -14,6 +14,11 @@ use_gpu: false
 curse_execution_buffer: 45
 curse_conflict_threshold: 240
 
+# Logs auto-deletion
+logging:
+  auto_delete: true
+  backup_count: 25
+
 # Wait time optimization
 adaptive_waits:
   enabled: true
