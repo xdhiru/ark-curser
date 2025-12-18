@@ -11,7 +11,7 @@ from utils.logger import logger
 from typing import Optional, List, Dict, Callable, Union, Tuple
 import time
 
-def find_and_click_text_with_retry(
+def find_and_click_text(
     text: str, 
     confidence_threshold: float = 0.6,
     max_retries: int = None
@@ -20,7 +20,6 @@ def find_and_click_text_with_retry(
     if max_retries is None:
         max_retries = wait_optimizer.max_retries
     
-    # We implement a manual loop here because 'text finding' isn't in click_helper
     for retry_count in range(max_retries + 1):
         wait_time = wait_optimizer.get_wait_time("text_find")
         time.sleep(wait_time)
@@ -77,7 +76,6 @@ def reach_home_screen(max_attempts: int = 15) -> bool:
         if is_home_screen():
             return True
         
-        # Click back (use generic template click)
         success, _ = click_template(
             "back-icon", 
             wait_after=False,
@@ -109,7 +107,6 @@ def reach_base(max_back_attempts: int = 15) -> bool:
                 adaptive_wait("base_transition", min_wait=3.0)
                 return True
         
-        # Click back
         success, _ = click_template(
             "back-icon", 
             wait_after=False,
@@ -133,7 +130,7 @@ def reach_base_left_side() -> bool:
         zoomed_out = find_template_in_image(screenshot, "trading-post-zoomed-out-base")
         if zoomed_out:
             logger.debug("Base appears zoomed out, repositioning")
-            click_template([zoomed_out[0]]) # Click the match found
+            click_template([zoomed_out[0]], description="zoomed-out-correction") 
             if not reach_base():
                 return False
     
@@ -147,7 +144,6 @@ def find_trading_posts() -> List[Dict]:
     """Find all trading posts on non-zoomed-out base (left side)."""
     logger.debug("Searching for trading posts")
     
-    # Force fresh screenshot
     screenshot = get_cached_screenshot(force_fresh=True)
     if screenshot is None:
         return []
@@ -203,7 +199,6 @@ def wait_for_template(
             adaptive_wait("post_template_find")
             return matches[0]
         
-        # Record failure to adaptive wait (allows system to learn if check interval is too fast)
         wait_optimizer.record_wait_result(
             "template_check_interval", check_interval, False, 0
         )
@@ -241,7 +236,3 @@ def ensure_at_location(
     if success:
         adaptive_wait("post_navigation")
     return success
-
-# Backward compatibility alias
-reach_home_screen_with_retry = lambda x=15: (reach_home_screen(x), 0)
-reach_base_with_retry = lambda x=15: (reach_base(x), 0)
