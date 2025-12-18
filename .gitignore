@@ -47,6 +47,7 @@ logs/
 # Environment configuration (machine-specific)
 .env
 .env.local
+config/adaptive_waits.pkl
 
 # Notes (development scratch)
 notes.txt

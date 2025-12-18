@@ -1,86 +1,77 @@
+"""
+Main entry point for ark_curser automation.
+"""
+
 import sys
-from pathlib import Path
-from typing import Optional
+import atexit
 from utils.logger import logger
 from utils.adb import adb_connect, adb_is_device_ready
+from utils.adaptive_waits import wait_optimizer
 from tasks.handle_trading_posts import handle_trading_posts
+from utils.config_loader import get_config_value
 
-
-class ark_curser:
-    """Main application class for ark_curser automation."""
+class ArkCurserBot:
+    """Main application class."""
     
     def __init__(self):
+        self.logger = logger
         self.device_connected = False
-    
-    def verify_device_connection(self) -> bool:
-        """
-        Verify ADB connection to device with detailed error reporting.
+        atexit.register(self.shutdown)
         
-        Returns:
-            bool: True if device is connected and ready, False otherwise
-        """
-        logger.info("Connecting to device...")
+    def shutdown(self):
+        if wait_optimizer.enabled:
+            self.logger.info("Saving adaptive wait times...")
+            wait_optimizer.save_waits()
+            wait_optimizer.print_report()
+
+    def verify_device_connection(self) -> bool:
+        self.logger.info("Connecting to device...")
+        target_ip = get_config_value("device_ip", "127.0.0.1:5555")
         
         try:
-            output = adb_connect()
+            output = adb_connect(target_ip)
             if output:
-                logger.debug(f"ADB connect output: {output}")
+                self.logger.debug(f"ADB connect output: {output}")
             
             self.device_connected = adb_is_device_ready()
             
             if not self.device_connected:
-                self._log_connection_errors()
+                self._log_troubleshooting()
                 return False
             
-            logger.info("Device connected successfully")
+            self.logger.info(f"Device connected successfully ({target_ip})")
             return True
             
         except Exception as e:
-            logger.error(f"ADB connection error: {e}")
+            self.logger.error(f"ADB connection error: {e}")
             return False
     
-    @staticmethod
-    def _log_connection_errors() -> None:
-        """Log common connection troubleshooting steps."""
-        logger.error("No device detected by ADB! Please check:")
-        logger.error("  1. Device is powered on and unlocked")
-        logger.error("  2. ADB debugging is enabled in Developer Options")
-        logger.error("  3. Device IP/port is correct in config/settings.yaml")
-        logger.error("  4. Device and computer are on same network")
-        logger.error("  5. Firewall isn't blocking ADB connections")
+    def _log_troubleshooting(self):
+        self.logger.error("No device detected! Please check:")
+        self.logger.error("  1. Device/Emulator is powered on")
+        self.logger.error("  2. ADB debugging is enabled")
+        self.logger.error("  3. Check 'device_ip' in settings.yaml")
     
     def run(self) -> int:
-        """Main execution loop for the bot.
-        
-        Returns:
-            int: Exit code (0 for success, non-zero for errors)
-        """
         try:
-            # Step 1: Verify device connection
             if not self.verify_device_connection():
                 return 1
             
-            # Step 2: Execute main automation task
-            logger.info("Starting trading post automation...")
+            self.logger.info("Starting automation...")
             handle_trading_posts()
             
-            logger.info("Automation completed successfully")
             return 0
             
         except KeyboardInterrupt:
-            logger.info("User interrupted execution (Ctrl+C)")
+            self.logger.info("User interrupted execution.")
             return 0
         except Exception as e:
-            logger.error(f"Fatal error: {e}", exc_info=True)
+            self.logger.error(f"Fatal error: {e}", exc_info=True)
             return 1
 
-
-def main() -> None:
-    """Main entry point for ark_curser."""
-    bot = ark_curser()
-    exit_code = bot.run()
-    sys.exit(exit_code)
-
+def main():
+    bot = ArkCurserBot()
+    sys.exit(bot.run())
 
 if __name__ == "__main__":
     main()

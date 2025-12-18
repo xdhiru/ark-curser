@@ -1,45 +1,52 @@
 """
-Navigation utilities for screen navigation and location verification.
+Navigation utilities with adaptive wait optimization.
 """
 
 from utils.adb import adb_tap, swipe_left, swipe_right, get_cached_screenshot
 from utils.vision import find_template, find_template_in_image
 from utils.ocr import find_text_coordinates
-from utils.click_helper import click_template as click_helper_template
+from utils.click_helper import click_template, adaptive_wait
+from utils.adaptive_waits import wait_optimizer
 from utils.logger import logger
-from typing import Optional, List, Dict, Callable, Union
+from typing import Optional, List, Dict, Callable, Union, Tuple
 import time
 
-
-def click_template(
-    template_name: Union[str, List[Dict]], 
-    threshold: float = 0.8,
-    use_cached_screenshot: bool = True
-) -> bool:
-    """
-    Find and click a template on screen.
-    
-    Args:
-        template_name: Template name or pre-found matches
-        threshold: Minimum confidence threshold
-        use_cached_screenshot: Use cached screenshot if available
-    """
-    # Use the optimized click helper
-    return click_helper_template(template_name, threshold, max_attempts=1 if use_cached_screenshot else 3)
-
-
-def find_and_click_text(
+def find_and_click_text_with_retry(
     text: str, 
     confidence_threshold: float = 0.6,
-    use_cached_screenshot: bool = True
-) -> bool:
-    """Find text on screen using OCR and click it."""
-    coords = find_text_coordinates(text, confidence_threshold)
+    max_retries: int = None
+) -> Tuple[bool, int]:
+    """Find text on screen using OCR and click it with retry."""
+    if max_retries is None:
+        max_retries = wait_optimizer.max_retries
     
-    if coords:
-        return adb_tap(coords[0])  # Click first occurrence
-    return False
-
+    # We implement a manual loop here because 'text finding' isn't in click_helper
+    for retry_count in range(max_retries + 1):
+        wait_time = wait_optimizer.get_wait_time("text_find")
+        time.sleep(wait_time)
+        
+        coords = find_text_coordinates(text, confidence_threshold)
+        
+        success = False
+        if coords:
+            success = adb_tap(coords[0][0], coords[0][1])
+            
+        should_retry, next_wait = wait_optimizer.record_wait_result(
+            "text_find", wait_time, success, retry_count
+        )
+        
+        if success:
+            adaptive_wait("post_click_wait")
+            return True, retry_count
+        
+        if not should_retry or retry_count >= max_retries:
+            break
+            
+        extra_wait = next_wait - wait_time
+        if extra_wait > 0:
+            time.sleep(extra_wait)
+    
+    return False, max_retries
 
 def is_home_screen() -> bool:
     """Check if currently on home screen."""
@@ -48,14 +55,12 @@ def is_home_screen() -> bool:
         return False
     return bool(find_template_in_image(screenshot, "settings-icon"))
 
-
 def is_base() -> bool:
     """Check if currently at base view."""
     screenshot = get_cached_screenshot()
     if screenshot is None:
         return False
     return bool(find_template_in_image(screenshot, "base-overview-icon"))
-
 
 def is_inside_tp() -> bool:
     """Check if currently at trading post view."""
@@ -64,39 +69,58 @@ def is_inside_tp() -> bool:
         return False
     return bool(find_template_in_image(screenshot, "check-if-inside-tp"))
 
-
 def reach_home_screen(max_attempts: int = 15) -> bool:
     """Navigate back to home screen."""
     logger.debug("Navigating to home screen")
+    
     for _ in range(max_attempts):
         if is_home_screen():
-            logger.debug("Arrived at home screen")
             return True
-        click_template("back-icon", use_cached_screenshot=False)
-        time.sleep(1)
+        
+        # Click back (use generic template click)
+        success, _ = click_template(
+            "back-icon", 
+            wait_after=False,
+            description="reach_home:back"
+        )
+        
+        if success:
+            adaptive_wait("screen_transition")
+    
     logger.warning(f"Failed to reach home screen after {max_attempts} attempts")
     return False
-
 
 def reach_base(max_back_attempts: int = 15) -> bool:
     """Navigate to base view."""
     logger.debug("Navigating to base")
     
-    # Press back until at base or home screen
     for _ in range(max_back_attempts):
         if is_base():
-            logger.debug("Arrived at base")
             return True
+        
         if is_home_screen():
             logger.debug("Reached home screen, navigating to base")
-            click_template("base-icon", use_cached_screenshot=False)
-            time.sleep(5)
-            return True       
-        click_template("back-icon", use_cached_screenshot=False)
-        time.sleep(1)    
+            success, _ = click_template(
+                "base-icon", 
+                description="reach_base:base_icon"
+            )
+            
+            if success:
+                adaptive_wait("base_transition", min_wait=3.0)
+                return True
+        
+        # Click back
+        success, _ = click_template(
+            "back-icon", 
+            wait_after=False,
+            description="reach_base:back"
+        )
+        
+        if success:
+            adaptive_wait("screen_transition")
+    
     logger.warning("Failed to navigate to base")
     return False
-
 
 def reach_base_left_side() -> bool:
     """Navigate to base and position on left side."""
@@ -106,128 +130,118 @@ def reach_base_left_side() -> bool:
     # Check for zoomed out view
     screenshot = get_cached_screenshot()
     if screenshot is not None:
-        zoomed_out_tp_match = find_template_in_image(screenshot, "trading-post-zoomed-out-base")
-        if zoomed_out_tp_match:
+        zoomed_out = find_template_in_image(screenshot, "trading-post-zoomed-out-base")
+        if zoomed_out:
             logger.debug("Base appears zoomed out, repositioning")
-            click_template(zoomed_out_tp_match)
+            click_template([zoomed_out[0]]) # Click the match found
             if not reach_base():
                 return False
     
     swipe_right()
+    adaptive_wait("swipe_completion")
     swipe_right()
-    time.sleep(0.5)
-    logger.debug("Positioned at base left side")
+    adaptive_wait("base_left_side_position")
     return True
-
 
 def find_trading_posts() -> List[Dict]:
     """Find all trading posts on non-zoomed-out base (left side)."""
     logger.debug("Searching for trading posts")
     
-    # Get fresh screenshot for accurate detection
-    screenshot = get_cached_screenshot()
+    # Force fresh screenshot
+    screenshot = get_cached_screenshot(force_fresh=True)
     if screenshot is None:
-        logger.error("Failed to get screenshot for trading post detection")
         return []
     
+    adaptive_wait("pre_template_search")
     matches = find_template_in_image(screenshot, "trading-post")
     logger.debug(f"Found {len(matches)} trading post(s)")
     return matches
-
 
 def find_factories() -> List[Dict]:
     """Find all factories on base (left side)."""
     logger.debug("Searching for factories")
     
-    screenshot = get_cached_screenshot()
+    screenshot = get_cached_screenshot(force_fresh=True)
     if screenshot is None:
-        logger.error("Failed to get screenshot for factory detection")
         return []
     
+    adaptive_wait("pre_template_search")
     matches = find_template_in_image(screenshot, "factory")
-    logger.debug(f"Found {len(matches)} factory(ies)")
     return matches
-
 
 def enter_base_overview() -> bool:
     """Enter base overview screen."""
-    logger.info("Entering base overview")
+    if not reach_base(): return False
     
-    if not reach_base():
-        logger.warning("Could not reach base")
-        return False
-    
-    if not click_template("base-overview-icon", use_cached_screenshot=False):
-        logger.warning("Could not click base overview icon")
-        return False
-    
-    time.sleep(0.25)
-    logger.debug("Successfully entered base overview")
-    return True
-
+    if click_template("base-overview-icon", threshold=0.8):
+        adaptive_wait("base_overview_load")
+        return True
+    return False
 
 def wait_for_template(
     template_name: str,
     timeout: int = 40,
     threshold: float = 0.8,
-    check_interval: float = 1.0,
-    use_cached_screenshot: bool = True
+    check_interval: float = None
 ) -> Optional[Dict]:
     """Wait for a template to appear on screen."""
     logger.debug(f"Waiting for '{template_name}' (timeout: {timeout}s)")
+    
+    if check_interval is None:
+        check_interval = wait_optimizer.get_wait_time("template_check_interval")
+    
     start_time = time.time()
     
     while time.time() - start_time < timeout:
-        if use_cached_screenshot:
-            screenshot = get_cached_screenshot()
-            if screenshot is None:
-                time.sleep(check_interval)
-                continue
-            matches = find_template_in_image(screenshot, template_name, threshold)
-        else:
-            matches = find_template(template_name, threshold)
-        
+        screenshot = get_cached_screenshot(force_fresh=True)
+        if screenshot is None:
+            time.sleep(check_interval)
+            continue
+
+        matches = find_template_in_image(screenshot, template_name, threshold)
         if matches:
-            elapsed = time.time() - start_time
-            logger.debug(f"Template found after {elapsed:.1f}s")
-            time.sleep(1)  # Brief pause for stability
+            adaptive_wait("post_template_find")
             return matches[0]
+        
+        # Record failure to adaptive wait (allows system to learn if check interval is too fast)
+        wait_optimizer.record_wait_result(
+            "template_check_interval", check_interval, False, 0
+        )
+        
         time.sleep(check_interval)
     
     logger.warning(f"Template '{template_name}' not found after {timeout}s")
     return None
 
-
 def retry_operation(
     func: Callable[[], bool],
     max_attempts: int = 3,
-    delay: float = 1.0,
+    delay_type: str = "retry_delay",
     desc: str = "operation"
 ) -> bool:
-    """Retry a function until it succeeds or max attempts reached."""
+    """Retry a function until it succeeds."""
     for attempt in range(1, max_attempts + 1):
-        logger.debug(f"Attempting {desc} (try {attempt}/{max_attempts})")
-        
         if func():
-            logger.debug(f"{desc} succeeded on attempt {attempt}")
             return True
-        
         if attempt < max_attempts:
-            time.sleep(delay)
-    
-    logger.warning(f"{desc} failed after {max_attempts} attempts")
+            adaptive_wait(delay_type)
     return False
-
 
 def ensure_at_location(
     check_func: Callable[[], bool],
     navigate_func: Callable[[], bool],
     location: str = "target location"
 ) -> bool:
-    """Ensure we're at a specific location, navigating if necessary."""
+    """Ensure we're at a specific location."""
     if check_func():
-        logger.debug(f"Already at {location}")
         return True
     
-    logger.info(f"Not at {location}, navigating...")
-    return navigate_func()
+    logger.info(f"Navigating to {location}...")
+    success = navigate_func()
+    if success:
+        adaptive_wait("post_navigation")
+    return success
+
+# Backward compatibility alias
+reach_home_screen_with_retry = lambda x=15: (reach_home_screen(x), 0)
+reach_base_with_retry = lambda x=15: (reach_base(x), 0)

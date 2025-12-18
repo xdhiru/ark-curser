@@ -2,65 +2,27 @@
 Trading post management with curse/uncurse scheduling.
 """
 
-from .navigation import *
-from utils.ocr import read_text_from_region, read_timer_from_region, find_text_coordinates
-from utils.ocr import read_text_from_image, read_timer_from_image
-from utils.adb import adb_tap, get_cached_screenshot
-from utils.adb import swipe_right, slow_swipe_left
+import logging
+from tasks.navigation import reach_base, reach_base_left_side, is_inside_tp, find_trading_posts
+from utils.ocr import read_text_from_image, read_timer_from_region, find_text_coordinates
+from utils.adb import adb_tap, get_cached_screenshot, swipe_right, slow_swipe_left
 from utils.logger import logger
 from utils.time_helper import get_ist_time_and_remaining
 from utils.vision import find_template_in_image
-from utils.click_helper import click_template as click_helper_template
+from utils.click_helper import click_template, click_region
+from utils.adaptive_waits import wait_optimizer
+from utils.config_loader import get_config_value
 import time
 import heapq
-import yaml
-from typing import List, Tuple, Optional, Set, Iterable
+from typing import List, Tuple, Optional, Iterable
 from contextlib import contextmanager
-import numpy as np
 
-# Load configuration once at module level
-with open('config/settings.yaml', 'r') as f:
-    config = yaml.safe_load(f)
-
-SCREEN_COORDS = config.get('screen_coordinates', {})
-CURRENTLY_TESTING = config.get('currently_testing', False)
-
-# Cursing protocol configuration
-CURSE_EXECUTION_BUFFER = config.get('curse_execution_buffer', 45)
-CURSE_CONFLICT_THRESHOLD = config.get('curse_conflict_threshold', 240)
-
-# Validate configuration
-if CURSE_EXECUTION_BUFFER <= 0:
-    raise ValueError(f"curse_execution_buffer must be > 0, got {CURSE_EXECUTION_BUFFER}")
-
-if CURSE_CONFLICT_THRESHOLD < 0:
-    raise ValueError(f"curse_conflict_threshold must be >= 0, got {CURSE_CONFLICT_THRESHOLD}")
-
-# Apply testing overrides
-if CURRENTLY_TESTING:
-    logger.info("Testing mode: Overriding CURSE_EXECUTION_BUFFER to 2s")
-    CURSE_EXECUTION_BUFFER = 2
-
-
-def handle_trading_posts():
-    """Main handler for processing trading posts"""
-    logger.info("=" * 45)
-    logger.info("Initializing trading posts...")
-    logger.info("=" * 45)
-    reach_base_left_side()
-    
-    for match in find_trading_posts():
-        TradingPost(match["x"], match["y"])
-        reach_base()
-    
-    logger.info("Trading posts initialized. Starting cursing protocol...")
-    TradingPost.initiate_cursing_protocol()
-
+SCREEN_COORDS = get_config_value('screen_coordinates', {})
+TESTING = get_config_value('currently_testing', False)
+CURSE_EXECUTION_BUFFER = 2 if TESTING else get_config_value('curse_execution_buffer', 45)
+CURSE_CONFLICT_THRESHOLD = get_config_value('curse_conflict_threshold', 240)
 
 class WorkerConfig:
-    """Centralized worker configuration"""
-    
-    # Worker mappings: name -> (category, template_name)
     WORKERS = {
         'Proviso': ('supporter', 'char-name-proviso'),
         'Quartz': ('guard', 'char-name-quartz'),
@@ -80,402 +42,301 @@ class WorkerConfig:
         'Lemuen': ('sniper', 'char-name-lemuen'),
         'Underflow': ('defender', 'char-name-underflow'),
     }
-    
-    # Curse worker set - used during curse operations
     CURSE_WORKERS = ('Proviso', 'Quartz', 'Tequila')
 
+class TradingPostAdapter(logging.LoggerAdapter):
+    """Automatically prefixes logs with the Trading Post ID."""
+    def process(self, msg, kwargs):
+        return f"[TP {self.extra['tp_id']}] {msg}", kwargs
 
 class TradingPost:
-    """Represents a trading post with curse/uncurse scheduling"""
+    """Represents a trading post with curse/uncurse scheduling."""
     
     _instances = []
-    _instance_count = 0
     _curse_uncurse_queue = []
     
-    # Screen coordinate constants
-    _WORKER_REGIONS = (
-        SCREEN_COORDS['productivity_worker_1_region'],
-        SCREEN_COORDS['productivity_worker_2_region'],
-        SCREEN_COORDS['productivity_worker_3_region']
-    )
-    _ORDER_TIMER_REGION = SCREEN_COORDS['order_timer_scan_region']
-    _TP_WORKERS_BUTTON = SCREEN_COORDS['tp_workers_entry_button']
-    
-    # ========== INITIALIZATION METHODS ==========
-    
-    def __init__(self, x: int, y: int):
+    def __init__(self, x: int, y: int, tp_id: int):
         self.x = x
         self.y = y
-        self.id = self._get_next_id()
+        self.id = tp_id
         self.productivity_workers = []
-        self.is_cursed = False
         self.execution_time = 0
+        self.is_cursed = False
+        
+        # Initialize Contextual Logger
+        self.logger = TradingPostAdapter(logger, {'tp_id': tp_id})
         
         self._instances.append(self)
         self._initialize()
     
-    @classmethod
-    def _get_next_id(cls) -> int:
-        """Get next trading post ID"""
-        cls._instance_count += 1
-        return cls._instance_count
-    
     def _initialize(self):
-        """Initialize trading post state"""
-        logger.debug(f"Initializing TradingPost {self.id} at ({self.x}, {self.y})")
-        self._update_execution_time()
-        self._schedule_curse()
-        logger.debug(f"TradingPost {self.id} initialized with first curse at {self.execution_time}")
+        self.logger.debug("Initializing")
+        if self._update_execution_time():
+            self._schedule_curse()
     
-    # ========== NAVIGATION METHODS ==========
-    
+    # --- Navigation ---
     @contextmanager
-    def _ensure_inside_tp(self, max_retries: int = 3, interval: float = 1.0):
-        """Context manager to ensure we're inside trading post"""
-        for attempt in range(max_retries):
+    def _ensure_inside_tp(self):
+        for _ in range(3):
             if is_inside_tp():
                 yield True
                 return
             
-            self._enter_trading_post()
-            time.sleep(interval)
-        
-        logger.debug(f"Failed to confirm TP entry after {max_retries} attempts")
+            if self._enter_trading_post()[0]:
+                wait_optimizer.wait("tp_interior_load")
+                yield True
+                return
+                
+        self.logger.error("Failed to confirm entry.")
         yield False
-    
-    def _enter_trading_post(self):
-        """Enter the trading post"""
-        logger.debug(f"TP {self.id}: Entering trading post at ({self.x}, {self.y})")
-        adb_tap(self.x, self.y)
-        time.sleep(1)
-        click_helper_template("tp-entry-arrow")
-        time.sleep(0.5)
-    
-    def _enter_workers_section(self) -> bool:
-        """Enter the workers section of the trading post"""
-        logger.debug(f"TP {self.id}: Entering workers section")
-        time.sleep(0.5)
-        adb_tap(*self._TP_WORKERS_BUTTON)
-        time.sleep(1)
-        return True
-    
-    def _scan_timer(self) -> Optional[int]:
-        """Scan and return the order timer in seconds"""
-        time.sleep(1)
-        return read_timer_from_region(*self._ORDER_TIMER_REGION)
-    
-    # ========== SCHEDULING METHODS ==========
-    
-    def _update_execution_time(self):
-        """Update the timer and calculate next execution time"""
-        with self._ensure_inside_tp() as inside_tp:
-            if not inside_tp:
-                logger.error(f"TP {self.id}: Cannot update execution time - not inside TP")
-                return False
-            timer_value = self._scan_timer()
-            if timer_value is None:
-                logger.error(f"TP {self.id}: Failed to read timer")
-                return False
-            self.execution_time = time.time() + timer_value
-            ist_time, remaining_str = get_ist_time_and_remaining(self.execution_time)
-            logger.info(f"TP {self.id}: Next execution at {ist_time} (in {remaining_str})")
-            return True
+
+    def _enter_trading_post(self) -> Tuple[bool, int]:
+        success_click, retries = click_region(
+            (self.x-10, self.y-10, self.x+10, self.y+10), 
+            max_retries=wait_optimizer.max_retries,
+            sleep_after=0
+        )
+        if not success_click: return False, retries
+        
+        wait_optimizer.wait("tp_entry_dialog")
+        return click_template("tp-entry-arrow", description=f"TP{self.id}:entry_arrow")
+
+    def _enter_workers_section(self) -> Tuple[bool, int]:
+        wait_optimizer.wait("pre_workers_click")
+        x, y = SCREEN_COORDS['tp_workers_entry_button']
+        s, r = click_region((x-5, y-5, x+5, y+5))
+        if s: wait_optimizer.wait("tp_workers_section_load")
+        return s, r
+
+    # --- Scanning ---
+    def _update_execution_time(self) -> bool:
+        with self._ensure_inside_tp() as ready:
+            if not ready: return False
+            
+            for i in range(3):
+                wait_optimizer.wait("timer_read_delay")
+                timer = read_timer_from_region(*SCREEN_COORDS['order_timer_scan_region'])
+                
+                if timer is not None:
+                    self.execution_time = time.time() + timer
+                    ist, rem = get_ist_time_and_remaining(self.execution_time)
+                    self.logger.info(f"Next execution {ist} (in {rem})")
+                    return True
         return False
-    
+
+    # --- Scheduling ---
     def _schedule_curse(self, prelay: int = 40):
-        """Schedule a curse task"""
-        if self.execution_time <= 0:
-            logger.error(f"TP {self.id}: Cannot schedule curse without valid execution time")
-            return
+        if self.execution_time <= 0: return
         curse_time = self.execution_time - prelay
         heapq.heappush(self._curse_uncurse_queue, (curse_time, self, True))
-        logger.debug(f"TP {self.id}: Scheduled curse task at {curse_time}")
-    
+        self.logger.debug(f"Scheduled CURSE at {curse_time}")
+
     def _schedule_uncurse(self, delay: int = 10):
-        """Schedule an uncurse task"""
-        if self.execution_time <= 0:
-            logger.error(f"TP {self.id}: Cannot schedule uncurse without valid execution time")
-            return
+        if self.execution_time <= 0: return
         uncurse_time = self.execution_time + delay
         heapq.heappush(self._curse_uncurse_queue, (uncurse_time, self, False))
-        logger.debug(f"TP {self.id}: Scheduled uncurse task at {uncurse_time}")
-    
-    # ========== WORKER MANAGEMENT METHODS ==========
-    
-    def _save_productivity_workers(self):
-        """Save current productivity workers"""
+        self.logger.debug(f"Scheduled UNCURSE at {uncurse_time}")
+
+    # --- Worker Logic ---
+    def _save_productivity_workers(self) -> Tuple[bool, int]:
+        screenshot = get_cached_screenshot(force_fresh=True)
+        if screenshot is None: return False, 0
+        
         self.productivity_workers = []
+        regions = [
+            SCREEN_COORDS['productivity_worker_1_region'],
+            SCREEN_COORDS['productivity_worker_2_region'],
+            SCREEN_COORDS['productivity_worker_3_region']
+        ]
         
-        # Get fresh screenshot for OCR
-        screenshot = get_cached_screenshot()
-        if screenshot is None:
-            logger.error(f"TP {self.id}: Failed to get screenshot for worker reading")
-            return
-        
-        for region in self._WORKER_REGIONS:
+        for region in regions:
             worker_text = read_text_from_image(screenshot, *region)
             self.productivity_workers.append(worker_text if worker_text else "Unknown")
-        
-        logger.info(f"TP {self.id}: Saved workers: {self.productivity_workers}")
-    
-    @staticmethod
-    def _sort_workers_by_skill():
-        """Prepare worker list with common sorting and filtering"""
-        click_helper_template("worker-list-sort-by-trust")
-        time.sleep(0.15)
-        click_helper_template("worker-list-sort-by-skill")
-        time.sleep(0.15)
-    
-    def _find_and_select_worker_by_text(self, worker_name: str, max_swipes: int = 40) -> bool:
-        """Select a worker using OCR text recognition"""
-        self._sort_workers_by_skill()
+            
+        self.logger.info(f"Saved workers: {self.productivity_workers}")
+        return True, 0
 
-        # Reset category filters
-        for icon in ["operator-categories-all-icon", 
-                     "operator-categories-supporter-icon",
-                     "operator-categories-all-icon"]:
-            click_helper_template(icon)
-            time.sleep(0.15)
-        
-        for swipe_count in range(max_swipes):
-            coords = find_text_coordinates(worker_name)
-            if coords:
-                adb_tap(coords[0])
-                return True
-            
+    def _sort_workers(self):
+        click_template("worker-list-sort-by-trust")
+        wait_optimizer.wait("worker_list_ready")
+        click_template("worker-list-sort-by-skill")
+        wait_optimizer.wait("worker_list_ready")
+
+    def _find_and_select_worker(self, target: str, is_template: bool) -> bool:
+        for swipe_count in range(15):
+            if is_template:
+                s, _ = click_template(target, max_retries=1, wait_after=True)
+                if s: 
+                    wait_optimizer.wait("worker_selection_feedback")
+                    return True
+            else:
+                coords = find_text_coordinates(target)
+                if coords:
+                    adb_tap(coords[0][0], coords[0][1])
+                    wait_optimizer.wait("worker_selection_feedback")
+                    return True
             slow_swipe_left()
-            
-            # Reset position periodically
-            if (swipe_count + 1) % max_swipes == 0:
-                for _ in range(30):
-                    swipe_right()
-        
-        logger.warning(f"TP {self.id}: Worker '{worker_name}' not found")
         return False
-    
-    def _find_and_select_worker_by_template(self, template_name: str, max_swipes: int = 25) -> bool:
-        """Helper to search for and tap a worker using template matching"""
-        for _ in range(max_swipes):
-            screenshot = get_cached_screenshot()
-            if screenshot is None:
-                continue
-            matches = find_template_in_image(screenshot, template_name)
-            if matches:
-                adb_tap(matches[0]["x"], matches[0]["y"])
-                logger.debug(f"TP {self.id}: Selected worker '{template_name}'")
-                return True
-            slow_swipe_left()
+
+    def _select_workers(self, worker_names: Iterable[str]) -> int:
+        self._sort_workers()
+        total_retries = 0
         
-        logger.warning(f"TP {self.id}: Worker template '{template_name}' not found")
-        return False
-    
-    def _select_workers(self, worker_names: Iterable[str]):
-        """Select workers with category tracking to minimize switching"""
-        self._sort_workers_by_skill()        
         current_category = None
         for worker_name in worker_names:
-            if worker_config := WorkerConfig.WORKERS.get(worker_name):
-                # Worker is in dictionary - use template matching
-                category, template_name = worker_config
+            if worker_name in WorkerConfig.WORKERS:
+                category, template_name = WorkerConfig.WORKERS[worker_name]
                 category_icon = f"operator-categories-{category.lower()}-icon"
                 
-                # Only switch category if necessary
                 if category_icon != current_category:
-                    click_helper_template(category_icon)
-                    current_category = category_icon
-                    time.sleep(0.15)
+                    if click_template(category_icon)[0]:
+                        current_category = category_icon
+                        wait_optimizer.wait("category_filter_switch")
                 
-                self._find_and_select_worker_by_template(template_name)
+                if not self._find_and_select_worker(template_name, is_template=True):
+                    self.logger.warning(f"Failed to find {worker_name}")
             else:
-                # Worker not in dictionary - use OCR search
-                logger.info(f"TP {self.id}: Worker '{worker_name}' not in config, using OCR")
-                self._find_and_select_worker_by_text(worker_name)
-                # After OCR, we're back in "all categories" with prepared list
+                click_template("operator-categories-all-icon")
                 current_category = None
-    
-    def _deselect_all_workers(self):
-        """Deselect all workers"""
-        click_helper_template("tp-workers-deselect-all-button")
-    
-    def _confirm_worker_selection(self):
-        """Confirm worker selection"""
-        click_helper_template("tp-workers-confirm-button")
-        # Check for confirmation prompt
-        screenshot = get_cached_screenshot()
-        if screenshot is not None:
-            matches = find_template_in_image(screenshot, "tp-workers-shift-confirmation-prompt")
-            if matches:
-                adb_tap(matches[0]["x"], matches[0]["y"])
-    
-    # ========== ORDER & DRONE METHODS ==========
-    
-    def _collect_orders(self):
-        """Collect ready orders if available"""
-        try:
-            click_helper_template("tp-order-ready-to-deliver")
-            time.sleep(1)
-        except Exception:
-            logger.info(f"TP {self.id}: No ready orders to collect")
-    
-    def _use_drones(self) -> bool:
-        """Use drones on the trading post"""
-        logger.info(f"TP {self.id}: Using drones")
-        
-        with self._ensure_inside_tp() as inside_tp:
-            if not inside_tp:
-                logger.error(f"TP {self.id}: Not inside TP")
-                return False
-            
-            if not click_helper_template("tp-use-drones-icon"):
-                logger.error(f"TP {self.id}: Drone icon not found")
-                return False
-            
-            for action in [
-                "tp-use-drones-max-icon",
-                "tp-use-drones-confirm-button"
-            ]:
-                click_helper_template(action)
-                time.sleep(0.15)
-            
-            logger.info(f"TP {self.id}: Drones used successfully")
-            time.sleep(1.5)
-            return True
-    
-    # ========== MAIN CURSE/UNCURSE METHODS ==========
-    
-    def curse(self, use_drones: bool = False):
-        """Perform curse task - assign special workers"""
-        logger.info(f"TP {self.id}: Curse task (drones={use_drones})")
+                if not self._find_and_select_worker(worker_name, is_template=False):
+                    self.logger.warning(f"Failed to find {worker_name} (OCR)")
+                    
+        return total_retries
+
+    # --- Actions ---
+    def curse(self, use_drones: bool = False) -> Tuple[bool, int]:
         start_time = time.time()
+        self.logger.info("Executing CURSE")
         
-        with self._ensure_inside_tp() as inside_tp:
-            if not inside_tp:
-                logger.error(f"TP {self.id}: Cannot curse - not inside TP")
-                return False
+        with self._ensure_inside_tp() as inside:
+            if not inside: return False, 0
             
             self._enter_workers_section()
             self._save_productivity_workers()
-            self._deselect_all_workers()
+            click_template("tp-workers-deselect-all-button")
+            wait_optimizer.wait("worker_deselect_all")
+            
             self._select_workers(WorkerConfig.CURSE_WORKERS)
-            self._confirm_worker_selection()
+            
+            s, r = click_template("tp-workers-confirm-button")
+            if s:
+                wait_optimizer.wait("worker_confirmation_dialog")
+                click_template("tp-workers-shift-confirmation-prompt", max_retries=0)
+                wait_optimizer.wait("worker_change_animation")
+            else:
+                return False, r
+
             self.is_cursed = True
             
             if use_drones:
-                logger.info(f"TP {self.id}: Using drones and immediate uncurse")
                 self._use_drones()
                 self._collect_orders()
                 duration = time.time() - start_time
-                logger.info(f"TP {self.id}: Curse completed in {duration:.1f}s with droning")
+                self.logger.info(f"CURSE (with drones) complete in {duration:.2f}s")
                 return self.uncurse()
             else:
                 if self._update_execution_time():
                     self._schedule_uncurse()
                     duration = time.time() - start_time
-                    logger.info(f"TP {self.id}: Curse completed in {duration:.1f}s")
-                    return True
-                else:
-                    logger.error(f"TP {self.id}: Curse failed – execution time update failed")
-                    return False
-                    
-    def uncurse(self):
-        """Perform uncurse task - restore original workers"""
-        logger.info(f"TP {self.id}: Uncurse task")
+                    self.logger.info(f"CURSE complete in {duration:.2f}s")
+                    return True, 0
+        return False, 0
+
+    def uncurse(self) -> Tuple[bool, int]:
         start_time = time.time()
+        self.logger.info("Executing UNCURSE")
         
-        with self._ensure_inside_tp() as inside_tp:
-            if not inside_tp:
-                logger.error(f"TP {self.id}: Cannot uncurse - not inside TP")
-                return False
+        with self._ensure_inside_tp() as inside:
+            if not inside: return False, 0
             
             self._enter_workers_section()
-            self._deselect_all_workers()
+            click_template("tp-workers-deselect-all-button")
+            wait_optimizer.wait("worker_deselect_all")
+            
+            if not self.productivity_workers:
+                self.logger.warning("No saved workers!")
+            
             self._select_workers(self.productivity_workers)
-            self._confirm_worker_selection()
-            self.productivity_workers.clear()
+            self.productivity_workers = []
+            
+            s, r = click_template("tp-workers-confirm-button")
+            if s:
+                wait_optimizer.wait("worker_confirmation_dialog")
+                click_template("tp-workers-shift-confirmation-prompt", max_retries=0)
+                wait_optimizer.wait("worker_change_animation")
+            else:
+                return False, r
+
             self.is_cursed = False
+            
             if self._update_execution_time():
                 self._schedule_curse()
+                
                 duration = time.time() - start_time
-                logger.info(f"TP {self.id}: Uncurse completed in {duration:.1f}s")
-                return True
-            else:
-                logger.error(f"TP {self.id}: Uncurse failed – execution time update failed")
-                return False
-    
-    # ========== SCHEDULING PROTOCOL METHODS ==========
-    
-    @classmethod
-    def _should_use_drones_for_curse(cls, execution_time: float) -> bool:
-        """
-        Check if curse should use drones due to another close curse task.
-        """
-        for task_time, _, is_curse in cls._curse_uncurse_queue:
-            time_diff = task_time - execution_time
-            if is_curse and 0 < time_diff <= CURSE_CONFLICT_THRESHOLD:
-                logger.info(f"Another curse in {time_diff:.0f}s, using drones")
-                return True
-        return False
-    
-    @classmethod
-    def _execute_task(cls, trading_post: 'TradingPost', is_curse: bool, scheduled_time: float):
-        """Execute a curse or uncurse task"""
-        task_type = "CURSE" if is_curse else "UNCURSE"
-        logger.info(f"Executing {task_type} for TP {trading_post.id}")
-        
-        try:
-            reach_base_left_side()
-            
-            if is_curse:
-                use_drones = cls._should_use_drones_for_curse(scheduled_time)
-                return trading_post.curse(use_drones)
-            else:
-                # Wait until exact execution time for uncurse
-                wait_time = max(0, scheduled_time - time.time())
-                
-                if CURRENTLY_TESTING:
-                    wait_time = 2
-                
-                if wait_time > 0:
-                    logger.info(f"Waiting {wait_time:.1f}s before uncurse")
-                    time.sleep(wait_time)
-                
-                return trading_post.uncurse()
-                
-        except Exception as e:
-            logger.error(f"Error executing {task_type} for TP {trading_post.id}: {e}", exc_info=True)
-            return False
-    
+                self.logger.info(f"UNCURSE complete in {duration:.2f}s")
+                return True, 0
+        return False, 0
+
+    def _use_drones(self):
+        if click_template("tp-use-drones-icon")[0]:
+            wait_optimizer.wait("drone_interface_load")
+            click_template("tp-use-drones-max-icon")
+            wait_optimizer.wait("drone_interface_load")
+            click_template("tp-use-drones-confirm-button")
+            wait_optimizer.wait("drone_animation")
+
+    def _collect_orders(self):
+        wait_optimizer.wait("order_check")
+        if click_template("tp-order-ready-to-deliver", max_retries=0)[0]:
+            wait_optimizer.wait("order_collection_animation")
+
+    # --- Protocol ---
     @classmethod
     def initiate_cursing_protocol(cls):
-        """Main loop for processing curse/uncurse tasks"""
-        logger.info("=" * 45)
-        logger.info(f"Cursing Protocol: Buffer={CURSE_EXECUTION_BUFFER}s, Conflict Threshold={CURSE_CONFLICT_THRESHOLD}s")
-        logger.info("=" * 45)
-        
+        # Using global logger for class-level method
+        logger.info(f"Protocol Started: Buffer={CURSE_EXECUTION_BUFFER}s, Conflict Threshold={CURSE_CONFLICT_THRESHOLD}s")
         while True:
             try:
                 if not cls._curse_uncurse_queue:
-                    logger.info("Task queue empty, checking in 60s")
+                    logger.info("Queue empty, checking in 60s...")
                     time.sleep(60)
                     continue
                 
-                current_time = time.time()
-                task_time, trading_post, is_curse = cls._curse_uncurse_queue[0]
-                time_until_task = task_time - current_time
+                now = time.time()
+                task_time, tp, is_curse = cls._curse_uncurse_queue[0]
                 
-                if time_until_task <= CURSE_EXECUTION_BUFFER:
+                if task_time - now <= CURSE_EXECUTION_BUFFER:
                     heapq.heappop(cls._curse_uncurse_queue)
-                    cls._execute_task(trading_post, is_curse, task_time)
-                    continue
-                
-                # Sleep until buffer time before execution
-                sleep_time = time_until_task - CURSE_EXECUTION_BUFFER
-                ist_time, remaining_str = get_ist_time_and_remaining(task_time)
-                task_type = "CURSE" if is_curse else "UNCURSE"
-                
-                logger.info(f"Sleeping - Next Task: [TP{trading_post.id}, {task_type}, {ist_time}] in {remaining_str}")
-                time.sleep(sleep_time)
                     
+                    use_drones = False
+                    if is_curse and cls._curse_uncurse_queue:
+                        next_time = cls._curse_uncurse_queue[0][0]
+                        if 0 < (next_time - task_time) <= CURSE_CONFLICT_THRESHOLD:
+                            logger.info(f"Conflict detected for TP {tp.id}, using drones.")
+                            use_drones = True
+                    
+                    reach_base_left_side()
+                    if is_curse:
+                        tp.curse(use_drones)
+                    else:
+                        wait = max(0, task_time - time.time())
+                        if wait > 0: time.sleep(wait)
+                        tp.uncurse()
+                else:
+                    sleep_time = task_time - now - CURSE_EXECUTION_BUFFER
+                    if sleep_time > 0:
+                        ist, rem = get_ist_time_and_remaining(task_time)
+                        type_str = "CURSE" if is_curse else "UNCURSE"
+                        logger.info(f"Next: TP {tp.id} {type_str} at {ist}. Sleeping {sleep_time:.1f}s")
+                        time.sleep(sleep_time)
             except Exception as e:
-                logger.error(f"Error in cursing protocol: {e}", exc_info=True)
+                logger.error(f"Protocol Error: {e}", exc_info=True)
                 time.sleep(60)
+
+def handle_trading_posts():
+    reach_base_left_side()
+    tps = find_trading_posts()
+    for i, match in enumerate(tps):
+        TradingPost(match["x"], match["y"], i+1)
+        reach_base()
+    TradingPost.initiate_cursing_protocol()

@@ -8,12 +8,18 @@ template_path: "Templates/"
 device_ip: "127.0.0.1:5555"
 use_gpu: false
 
-
 # Fine-tunable static Values 
 
 # TP Interaction Delays (in seconds)
 curse_execution_buffer: 45
 curse_conflict_threshold: 240
+
+# Wait time optimization
+adaptive_waits:
+  enabled: true
+  aggressiveness: 0.7  # 0.0 (conservative) to 1.0 (aggressive)
+  save_file: "config/adaptive_waits.pkl"
+  max_retries: 15  # Maximum retries for timing-related failures
 
 # Screen Coordinates for various Trading Post Operations at 1080p resolution
 screen_coordinates:
