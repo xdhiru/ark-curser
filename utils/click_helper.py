@@ -50,9 +50,13 @@ def click_template(
     threshold: float = 0.8,
     max_retries: int = None,
     wait_after: bool = True,
-    description: str = "template click"
+    description: str = None
 ) -> Tuple[bool, int]:
     """Find template and click it with smart retry system."""
+
+    if description is None:
+        t_name = template_name if isinstance(template_name, str) else "cached-coordinates"
+        description = f"template['{t_name}']"
     
     # 1. Pre-calculated matches
     if isinstance(template_name, list):
@@ -68,7 +72,9 @@ def click_template(
     def attempt_click():
         screenshot = get_cached_screenshot(force_fresh=True)
         if screenshot is None: return False
+        
         matches = find_template_in_image(screenshot, template_name, threshold)
+        
         if matches:
             coord = matches[0]
             logger.debug(f"Clicking '{template_name}' at ({coord['x']}, {coord['y']})")
@@ -99,7 +105,7 @@ def click_region(
     def attempt_click():
         return adb_tap(center_x, center_y)
 
-    success, retries = _execute_action("region_click", attempt_click, max_retries, "region click")
+    success, retries = _execute_action("region_click", attempt_click, max_retries, f"region {region}")
     
     if success:
         if sleep_after is not None:
@@ -108,25 +114,3 @@ def click_region(
             adaptive_wait("post_region_click")
             
     return success, retries
-
-def wait_and_click(
-    template_name: str,
-    timeout: float = 10.0,
-    interval: float = None,
-    threshold: float = 0.8
-) -> bool:
-    """Wait for template to appear and click it."""
-    if interval is None:
-        interval = wait_optimizer.get_wait_time("template_check_interval")
-        
-    start = time.time()
-    while time.time() - start < timeout:
-        success, _ = click_template(
-            template_name, threshold, max_retries=0, wait_after=True, description=f"wait:{template_name}"
-        )
-        if success:
-            return True
-        time.sleep(interval)
-        
-    logger.warning(f"Timeout waiting for {template_name}")
-    return False
