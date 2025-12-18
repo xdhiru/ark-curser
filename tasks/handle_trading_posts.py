@@ -91,15 +91,26 @@ class TradingPost:
         yield False
 
     def _enter_trading_post(self) -> Tuple[bool, int]:
-        success_click, retries = click_region(
+        click_region(
             (self.x-10, self.y-10, self.x+10, self.y+10), 
             max_retries=wait_optimizer.max_retries,
             sleep_after=0
         )
-        if not success_click: return False, retries
-        
         wait_optimizer.wait("tp_entry_dialog")
-        return click_template("tp-entry-arrow", description=f"TP{self.id}:entry_arrow")
+        success, r = click_template("tp-entry-arrow", max_retries=0, description=f"TP{self.id}:entry_arrow_check")
+        
+        if success:
+            return True, r
+        self.logger.debug("Entry arrow missing. Assuming order collected. Tapping again...")
+        time.sleep(0.5) 
+
+        click_region(
+            (self.x-10, self.y-10, self.x+10, self.y+10), 
+            max_retries=1,
+            sleep_after=0
+        )
+        wait_optimizer.wait("tp_entry_dialog")
+        return click_template("tp-entry-arrow", description=f"TP{self.id}:entry_arrow_final")
 
     def _enter_workers_section(self) -> Tuple[bool, int]:
         wait_optimizer.wait("pre_workers_click")
@@ -271,7 +282,6 @@ class TradingPost:
             
             if self._update_execution_time():
                 self._schedule_curse()
-                
                 duration = time.time() - start_time
                 self.logger.info(f"UNCURSE complete in {duration:.2f}s")
                 return True, 0
@@ -293,7 +303,6 @@ class TradingPost:
     # --- Protocol ---
     @classmethod
     def initiate_cursing_protocol(cls):
-        # Using global logger for class-level method
         logger.info(f"Protocol Started: Buffer={CURSE_EXECUTION_BUFFER}s, Conflict Threshold={CURSE_CONFLICT_THRESHOLD}s")
         while True:
             try:
