@@ -48,17 +48,52 @@ class WaitOptimizer:
     def _get_initial_defaults(self) -> Dict[str, float]:
         """Define the initial pessimistic wait times."""
         return {
-            "base_transition": 5.0, "base_overview_load": 0.25, "base_left_side_position": 0.5,
-            "tp_entry_dialog": 1.0, "tp_interior_load": 0.5, "tp_workers_section_load": 1.0,
-            "worker_list_ready": 0.15, "category_filter_switch": 0.15, "worker_selection_feedback": 0.3,
-            "worker_deselect_all": 0.5, "worker_confirmation_dialog": 1.0, "worker_change_animation": 1.5,
-            "pre_ocr_wait": 0.5, "text_search": 0.5, "worker_selection": 0.2,
-            "timer_read_delay": 1.0, "drone_interface_load": 0.15, "drone_animation": 1.5,
-            "order_collection_animation": 1.0, "order_check": 0.5,
-            "swipe_completion": 0.2, "slow_swipe_completion": 0.2,
-            "template_check_interval": 0.5, "template_click": 0.5, "region_click": 0.5,
-            "screenshot_retry": 0.2, "retry_delay": 0.5, "screen_transition": 0.5,
-            "coordinate_click": 0.1
+            # --- Navigation & Base ---
+            "base_transition": 5.0, 
+            "base_overview_load": 0.25, 
+            "base_left_side_position": 0.5,
+            
+            # --- Trading Post Interactions ---
+            "tp_entry_dialog": 1.0, 
+            "tp_interior_load": 0.5, 
+            "tp_workers_section_load": 1.0,
+            
+            # --- Worker Management ---
+            "worker_list_ready": 0.15, 
+            "category_filter_switch": 0.15, 
+            "worker_selection_feedback": 0.3,
+            "worker_deselect_all": 0.5, 
+            "worker_confirmation_dialog": 1.0, 
+            "worker_change_animation": 1.5,
+            "worker_selection": 0.2,
+            
+            # --- OCR & Text ---
+            "pre_ocr_wait": 0.5, 
+            "text_search": 0.5, 
+            "timer_read_delay": 1.0, 
+            
+            # --- Drones & Orders ---
+            "drone_interface_load": 0.15, 
+            "drone_animation": 1.5,
+            "order_collection_animation": 1.0, 
+            "order_check": 0.5,
+            
+            # --- Low Level Operations ---
+            "swipe_completion": 0.2, 
+            "slow_swipe_completion": 0.2,
+            "template_check_interval": 0.5, 
+            "template_click": 0.5, 
+            "region_click": 0.5,
+            "coordinate_click": 0.1,
+            "screenshot_retry": 0.2, 
+            "retry_delay": 0.5, 
+            "screen_transition": 0.5,
+            
+            # --- Post-Action Delays ---
+            "post_click_wait": 0.3,
+            "post_region_click": 0.3,
+            "post_template_find": 0.2,
+            "post_navigation": 0.5
         }
     
     def _load_saved_waits(self):
@@ -66,8 +101,12 @@ class WaitOptimizer:
         try:
             with open(self.save_file, 'rb') as f:
                 saved_data = pickle.load(f)
+            self.logger.debug(f"Importing saved waits from {self.save_file}...")
             for k, v in saved_data.get('waits', {}).items():
-                if k in self.default_waits: self.default_waits[k] = v
+                if k not in self.default_waits:
+                    self.logger.debug(f"Found new wait key: '{k}'={v:.2f}s (not present in adaptive_waits.py defaults)")
+                self.default_waits[k] = v
+            self.logger.debug("Importing completed.") 
             self.history = saved_data.get('history', {})
             self.convergence_data = saved_data.get('convergence', {})
             self.logger.info(f"Loaded saved wait times from {self.save_file}")
@@ -88,12 +127,18 @@ class WaitOptimizer:
             return max(min_wait, self.default_waits.get(wait_type, 0.5))
         
         base = self.default_waits.get(wait_type, 0.5)
+        if "buffer" in wait_type:
+            return base
+            
         variance = 1.0 + (random.random() * 0.02 - 0.01)
         return max(min_wait, base * variance)
     
     def record_wait_result(self, wait_type: str, wait_time_used: float, 
                            was_successful: bool, retry_count: int = 0) -> Tuple[bool, float]:
         if not self.enabled: return False, wait_time_used
+        
+        if "buffer" in wait_type:
+            return False, wait_time_used
         
         if wait_type not in self.history: self.history[wait_type] = deque(maxlen=100)
         self.history[wait_type].append((wait_time_used, was_successful, retry_count))
@@ -153,7 +198,9 @@ class WaitOptimizer:
             count = len(hist)
             
             status = "NEW"
-            if key in self.convergence_data:
+            if "buffer" in key:
+                status = "CONSTANT"
+            elif key in self.convergence_data:
                 if self.convergence_data[key]["stable_count"] >= self.stability_threshold:
                     status = "STABLE"
                 else:
