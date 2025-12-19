@@ -87,37 +87,37 @@ class TradingPost:
         yield False
 
     def _enter_trading_post(self) -> Tuple[bool, int]:
-        click_region(
-            (self.x-10, self.y-10, self.x+10, self.y+10), 
-            max_retries=wait_optimizer.max_retries,
-            sleep_after=0
-        )
+        """
+        Robust entry logic. Handles two cases:
+        1. Normal Entry: Click TP -> Dialog Opens -> Click Arrow.
+        2. Order Ready: Click TP -> Order Collected -> Wait -> Retry Click TP -> Dialog Opens.
+        """
+        max_attempts = 3
         
-        success, r = click_template(
-            "tp-entry-arrow", 
-            max_retries=0, 
-            description=f"TP{self.id}:entry_arrow_check",
-            timing_key="tp_entry_dialog" 
-        )
-        
-        if success:
-            return True, r
+        for attempt in range(max_attempts):
+            click_region(
+                (self.x-10, self.y-10, self.x+10, self.y+10), 
+                max_retries=1,
+                sleep_after=0,
+                timing_key="tp_building_tap" 
+            )
             
-        self.logger.debug("Entry arrow missing. Assuming order collected. Tapping again...")
-        time.sleep(0.5) 
+            success, retries = click_template(
+                "tp-entry-arrow", 
+                max_retries=2,
+                description=f"TP{self.id}:enter",
+                timing_key="tp_entry_dialog" 
+            )
+            
+            if success:
+                return True, retries
+            
+            self.logger.info(f"Entry dialog did not appear (Attempt {attempt+1}). Assuming Order Collection.")
+            static_wait("order_collection_animation") 
 
-        click_region(
-            (self.x-10, self.y-10, self.x+10, self.y+10), 
-            max_retries=1,
-            sleep_after=0
-        )
-        
-        return click_template(
-            "tp-entry-arrow", 
-            description=f"TP{self.id}:entry_arrow_final",
-            timing_key="tp_entry_dialog"
-        )
-
+        self.logger.error(f"Failed to enter Trading Post {self.id} after {max_attempts} attempts.")
+        return False, 0
+    
     def _enter_workers_section(self) -> Tuple[bool, int]:
         static_wait("pre_workers_click")
         x, y = SCREEN_COORDS['tp_workers_entry_button']

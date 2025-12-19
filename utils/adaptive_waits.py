@@ -54,6 +54,7 @@ class WaitOptimizer:
             "base_left_side_position": 0.5,
             
             # --- Trading Post Interactions ---
+            "tp_building_tap": 0.5,
             "tp_entry_dialog": 1.0, 
             "tp_interior_load": 0.5, 
             "tp_workers_section_load": 1.0,
