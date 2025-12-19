@@ -9,7 +9,7 @@ from utils.adb import adb_tap, get_cached_screenshot, swipe_right, slow_swipe_le
 from utils.logger import logger
 from utils.time_helper import get_ist_time_and_remaining
 from utils.vision import find_template_in_image
-from utils.click_helper import click_template, click_region
+from utils.click_helper import click_template, click_region, static_wait, adaptive_wait
 from utils.adaptive_waits import wait_optimizer
 from utils.config_loader import get_config_value
 import time
@@ -45,13 +45,10 @@ class WorkerConfig:
     CURSE_WORKERS = ('Proviso', 'Quartz', 'Tequila')
 
 class TradingPostAdapter(logging.LoggerAdapter):
-    """Automatically prefixes logs with the Trading Post ID."""
     def process(self, msg, kwargs):
         return f"[TP {self.extra['tp_id']}] {msg}", kwargs
 
 class TradingPost:
-    """Represents a trading post with curse/uncurse scheduling."""
-    
     _instances = []
     _curse_uncurse_queue = []
     
@@ -63,7 +60,6 @@ class TradingPost:
         self.execution_time = 0
         self.is_cursed = False
         
-        # Initialize Contextual Logger
         self.logger = TradingPostAdapter(logger, {'tp_id': tp_id})
         
         self._instances.append(self)
@@ -83,7 +79,7 @@ class TradingPost:
                 return
             
             if self._enter_trading_post()[0]:
-                wait_optimizer.wait("tp_interior_load")
+                adaptive_wait("tp_interior_load", is_inside_tp)
                 yield True
                 return
                 
@@ -96,11 +92,17 @@ class TradingPost:
             max_retries=wait_optimizer.max_retries,
             sleep_after=0
         )
-        wait_optimizer.wait("tp_entry_dialog")
-        success, r = click_template("tp-entry-arrow", max_retries=0, description=f"TP{self.id}:entry_arrow_check")
+        
+        success, r = click_template(
+            "tp-entry-arrow", 
+            max_retries=0, 
+            description=f"TP{self.id}:entry_arrow_check",
+            timing_key="tp_entry_dialog" 
+        )
         
         if success:
             return True, r
+            
         self.logger.debug("Entry arrow missing. Assuming order collected. Tapping again...")
         time.sleep(0.5) 
 
@@ -109,14 +111,25 @@ class TradingPost:
             max_retries=1,
             sleep_after=0
         )
-        wait_optimizer.wait("tp_entry_dialog")
-        return click_template("tp-entry-arrow", description=f"TP{self.id}:entry_arrow_final")
+        
+        return click_template(
+            "tp-entry-arrow", 
+            description=f"TP{self.id}:entry_arrow_final",
+            timing_key="tp_entry_dialog"
+        )
 
     def _enter_workers_section(self) -> Tuple[bool, int]:
-        wait_optimizer.wait("pre_workers_click")
+        static_wait("pre_workers_click")
         x, y = SCREEN_COORDS['tp_workers_entry_button']
         s, r = click_region((x-5, y-5, x+5, y+5))
-        if s: wait_optimizer.wait("tp_workers_section_load")
+        
+        if s:
+            def is_worker_section_loaded():
+                s = get_cached_screenshot(force_fresh=True)
+                return bool(find_template_in_image(s, "tp-workers-deselect-all-button"))
+            
+            adaptive_wait("tp_workers_section_load", is_worker_section_loaded)
+            
         return s, r
 
     # --- Scanning ---
@@ -125,7 +138,7 @@ class TradingPost:
             if not ready: return False
             
             for i in range(3):
-                wait_optimizer.wait("timer_read_delay")
+                static_wait("timer_read_delay") 
                 timer = read_timer_from_region(*SCREEN_COORDS['order_timer_scan_region'])
                 
                 if timer is not None:
@@ -168,23 +181,21 @@ class TradingPost:
         return True, 0
 
     def _sort_workers(self):
-        click_template("worker-list-sort-by-trust")
-        wait_optimizer.wait("worker_list_ready")
-        click_template("worker-list-sort-by-skill")
-        wait_optimizer.wait("worker_list_ready")
+        click_template("worker-list-sort-by-trust", timing_key="worker_list_ready")
+        click_template("worker-list-sort-by-skill", timing_key="worker_list_ready")
 
     def _find_and_select_worker(self, target: str, is_template: bool) -> bool:
         for swipe_count in range(15):
             if is_template:
                 s, _ = click_template(target, max_retries=1, wait_after=True)
                 if s: 
-                    wait_optimizer.wait("worker_selection_feedback")
+                    static_wait("worker_selection_feedback")
                     return True
             else:
                 coords = find_text_coordinates(target)
                 if coords:
                     adb_tap(coords[0][0], coords[0][1])
-                    wait_optimizer.wait("worker_selection_feedback")
+                    static_wait("worker_selection_feedback")
                     return True
             slow_swipe_left()
         return False
@@ -200,9 +211,8 @@ class TradingPost:
                 category_icon = f"operator-categories-{category.lower()}-icon"
                 
                 if category_icon != current_category:
-                    if click_template(category_icon)[0]:
+                    if click_template(category_icon, timing_key="category_filter_switch")[0]:
                         current_category = category_icon
-                        wait_optimizer.wait("category_filter_switch")
                 
                 if not self._find_and_select_worker(template_name, is_template=True):
                     self.logger.warning(f"Failed to find {worker_name}")
@@ -225,13 +235,13 @@ class TradingPost:
             self._enter_workers_section()
             self._save_productivity_workers()
             click_template("tp-workers-deselect-all-button")
-            wait_optimizer.wait("worker_deselect_all")
+            static_wait("worker_deselect_all")
             
             self._select_workers(WorkerConfig.CURSE_WORKERS)
             
             s, r = click_template("tp-workers-confirm-button")
             if s:
-                wait_optimizer.wait("worker_confirmation_dialog")
+                adaptive_wait("worker_confirmation_dialog", is_inside_tp)
             else:
                 return False, r
 
@@ -260,7 +270,7 @@ class TradingPost:
             
             self._enter_workers_section()
             click_template("tp-workers-deselect-all-button")
-            wait_optimizer.wait("worker_deselect_all")
+            static_wait("worker_deselect_all")
             
             if not self.productivity_workers:
                 self.logger.warning("No saved workers!")
@@ -270,7 +280,7 @@ class TradingPost:
             
             s, r = click_template("tp-workers-confirm-button")
             if s:
-                wait_optimizer.wait("worker_confirmation_dialog")
+                adaptive_wait("worker_confirmation_dialog", is_inside_tp)
             else:
                 return False, r
 
@@ -285,16 +295,13 @@ class TradingPost:
 
     def _use_drones(self):
         if click_template("tp-use-drones-icon")[0]:
-            wait_optimizer.wait("drone_interface_load")
-            click_template("tp-use-drones-max-icon")
-            wait_optimizer.wait("drone_interface_load")
-            click_template("tp-use-drones-confirm-button")
-            wait_optimizer.wait("drone_animation")
+            click_template("tp-use-drones-max-icon", timing_key="drone_interface_load")
+            click_template("tp-use-drones-confirm-button", timing_key="drone_interface_load")
+            static_wait("drone_animation")
 
     def _collect_orders(self):
-        wait_optimizer.wait("order_check")
-        if click_template("tp-order-ready-to-deliver", max_retries=0)[0]:
-            wait_optimizer.wait("order_collection_animation")
+        if click_template("tp-order-ready-to-deliver", max_retries=1, timing_key="order_check")[0]:
+            static_wait("order_collection_animation")
 
     # --- Protocol ---
     @classmethod

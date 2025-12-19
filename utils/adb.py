@@ -75,7 +75,6 @@ def adb_is_device_ready() -> bool:
 
 def adb_tap(x: int, y: int) -> bool:
     """Tap coordinates and clear cache."""
-    # Support list of tuples if passed by accident, though cleaner to enforce int
     if isinstance(x, list): x, y = x[0]
         
     logger.debug(f"Tap: ({x}, {y})")
@@ -92,14 +91,14 @@ def adb_swipe(x1, y1, x2, y2, duration=300):
 def swipe_left():
     logger.debug("Swiping left")
     adb_swipe(1650, 535, 700, 535)
-    wait_optimizer.wait("swipe_completion")
+    wait_optimizer.static_wait("swipe_completion")
 
 def swipe_right():
     logger.debug("Swiping right")
     adb_swipe(700, 535, 1650, 535)
-    wait_optimizer.wait("swipe_completion")
+    wait_optimizer.static_wait("swipe_completion")
 
 def slow_swipe_left():
     logger.debug("Slow swipe left")
     adb_swipe(1500, 550, 1000, 550, 700)
-    wait_optimizer.wait("slow_swipe_completion")
+    wait_optimizer.static_wait("slow_swipe_completion")

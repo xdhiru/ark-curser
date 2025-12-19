@@ -9,8 +9,43 @@ from utils.vision import find_template_in_image
 from utils.adaptive_waits import wait_optimizer
 from utils.logger import logger
 
-def adaptive_wait(wait_type: str, min_wait: float = 0.05) -> float:
-    return wait_optimizer.wait(wait_type, min_wait)
+def static_wait(wait_type: str, min_wait: float = 0.05) -> float:
+    """Standard blind sleep using optimized timing (Open-loop)."""
+    return wait_optimizer.static_wait(wait_type, min_wait)
+
+def adaptive_wait(
+    wait_type: str, 
+    validator_func: Callable[[], bool], 
+    timeout: float = 20.0,
+    poll_frequency: float = 0.5
+) -> bool:
+    """Waits dynamically using a validator function (Closed-loop)."""
+    initial_wait = wait_optimizer.get_wait_time(wait_type)
+    time.sleep(initial_wait)
+
+    # 1. Immediate Check (Optimization chance)
+    if validator_func():
+        wait_optimizer.record_wait_result(wait_type, initial_wait, True, retry_count=0)
+        return True
+
+    # 2. Retry Loop (Correction chance)
+    elapsed = initial_wait
+    retries = 0
+    start_time = time.time()
+    remaining_timeout = max(timeout - initial_wait, 2.0)
+
+    while time.time() - start_time < remaining_timeout:
+        retries += 1
+        time.sleep(poll_frequency)
+        elapsed += poll_frequency
+        
+        if validator_func():
+            wait_optimizer.record_wait_result(wait_type, elapsed, True, retry_count=retries)
+            return True
+
+    logger.warning(f"Validation for '{wait_type}' failed after {elapsed:.1f}s")
+    wait_optimizer.record_wait_result(wait_type, elapsed, False, retry_count=retries)
+    return False
 
 def _execute_action(
     action_name: str,
@@ -50,7 +85,8 @@ def click_template(
     threshold: float = 0.8,
     max_retries: int = None,
     wait_after: bool = True,
-    description: str = None
+    description: str = None,
+    timing_key: str = "template_click"
 ) -> Tuple[bool, int]:
     """Find template and click it with smart retry system."""
 
@@ -63,8 +99,8 @@ def click_template(
         if not template_name: return False, 0
         x, y = template_name[0]["x"], template_name[0]["y"]
         if adb_tap(x, y):
-            wait_optimizer.record_wait_result("template_click", 0.05, True, 0)
-            if wait_after: adaptive_wait("post_click_wait")
+            wait_optimizer.record_wait_result(timing_key, 0.05, True, 0)
+            if wait_after: static_wait("post_click_wait")
             return True, 0
         return False, 0
 
@@ -82,17 +118,18 @@ def click_template(
         return False
 
     # 3. Execution
-    success, retries = _execute_action("template_click", attempt_click, max_retries, description)
+    success, retries = _execute_action(timing_key, attempt_click, max_retries, description)
     
     if success and wait_after:
-        adaptive_wait("post_click_wait")
+        static_wait("post_click_wait")
         
     return success, retries
 
 def click_region(
     region: tuple, 
     max_retries: int = None,
-    sleep_after: float = None
+    sleep_after: float = None,
+    timing_key: str = "region_click"
 ) -> Tuple[bool, int]:
     """Click at the center of a region with retry."""
     if len(region) != 4:
@@ -105,12 +142,12 @@ def click_region(
     def attempt_click():
         return adb_tap(center_x, center_y)
 
-    success, retries = _execute_action("region_click", attempt_click, max_retries, f"region {region}")
+    success, retries = _execute_action(timing_key, attempt_click, max_retries, f"region {region}")
     
     if success:
         if sleep_after is not None:
             time.sleep(sleep_after)
         else:
-            adaptive_wait("post_region_click")
+            static_wait("post_region_click")
             
     return success, retries

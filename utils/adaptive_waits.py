@@ -50,13 +50,14 @@ class WaitOptimizer:
         return {
             # --- Navigation & Base ---
             "base_transition": 5.0, 
-            "base_overview_load": 0.25, 
+            "base_overview_load": 0.5, 
             "base_left_side_position": 0.5,
             
             # --- Trading Post Interactions ---
             "tp_entry_dialog": 1.0, 
             "tp_interior_load": 0.5, 
             "tp_workers_section_load": 1.0,
+            "pre_workers_click": 0.5,
             
             # --- Worker Management ---
             "worker_list_ready": 0.15, 
@@ -64,17 +65,11 @@ class WaitOptimizer:
             "worker_selection_feedback": 0.3,
             "worker_deselect_all": 0.5, 
             "worker_confirmation_dialog": 1.0,
-            "worker_selection": 0.2,
-            
-            # --- OCR & Text ---
-            "pre_ocr_wait": 0.5, 
-            "text_search": 0.5, 
-            "timer_read_delay": 1.0, 
             
             # --- Drones & Orders ---
-            "drone_interface_load": 0.15, 
+            "drone_interface_load": 0.5, 
             "drone_animation": 1.5,
-            "order_collection_animation": 1.0, 
+            "order_collection_animation": 1.5, 
             "order_check": 0.5,
             
             # --- Low Level Operations ---
@@ -83,16 +78,19 @@ class WaitOptimizer:
             "template_check_interval": 0.5, 
             "template_click": 0.5, 
             "region_click": 0.5,
-            "coordinate_click": 0.1,
-            "screenshot_retry": 0.2, 
             "retry_delay": 0.5, 
             "screen_transition": 0.5,
+            "pre_template_search": 0.5,
             
             # --- Post-Action Delays ---
             "post_click_wait": 0.3,
             "post_region_click": 0.3,
             "post_template_find": 0.2,
-            "post_navigation": 0.5
+            "post_navigation": 0.5,
+            
+            # --- OCR / Vision ---
+            "text_find": 0.5,
+            "timer_read_delay": 1.0
         }
     
     def _load_saved_waits(self):
@@ -105,7 +103,7 @@ class WaitOptimizer:
                 if k not in self.default_waits:
                     self.logger.debug(f"Found new wait key: '{k}'={v:.2f}s (not present in adaptive_waits.py defaults)")
                 self.default_waits[k] = v
-            self.logger.debug("Importing completed.") 
+            self.logger.debug("Importing completed.")
             self.history = saved_data.get('history', {})
             self.convergence_data = saved_data.get('convergence', {})
             self.logger.info(f"Loaded saved wait times from {self.save_file}")
@@ -126,18 +124,12 @@ class WaitOptimizer:
             return max(min_wait, self.default_waits.get(wait_type, 0.5))
         
         base = self.default_waits.get(wait_type, 0.5)
-        if "buffer" in wait_type:
-            return base
-            
         variance = 1.0 + (random.random() * 0.02 - 0.01)
         return max(min_wait, base * variance)
     
     def record_wait_result(self, wait_type: str, wait_time_used: float, 
                            was_successful: bool, retry_count: int = 0) -> Tuple[bool, float]:
         if not self.enabled: return False, wait_time_used
-        
-        if "buffer" in wait_type:
-            return False, wait_time_used
         
         if wait_type not in self.history: self.history[wait_type] = deque(maxlen=100)
         self.history[wait_type].append((wait_time_used, was_successful, retry_count))
@@ -146,24 +138,29 @@ class WaitOptimizer:
 
         if was_successful:
             if retry_count == 0:
+                # OPTIMIZATION (Learn Down)
                 new_wait = current_permanent_wait * self.success_delta
                 self._update_permanent_wait(wait_type, new_wait)
                 return False, new_wait
             else:
-                self.logger.info(f"Wait '{wait_type}' adapted up: {current_permanent_wait:.2f}s -> {wait_time_used:.2f}s")
-                self._update_permanent_wait(wait_type, wait_time_used)
-                return False, wait_time_used
+                # CORRECTION (Learn Up)
+                target_time = wait_time_used * 1.05
+                weighted_new = (current_permanent_wait * 0.7) + (target_time * 0.3)
+                self.logger.info(f"Wait '{wait_type}' adapted UP: {current_permanent_wait:.2f}s -> {weighted_new:.2f}s (Actual: {wait_time_used:.2f}s)")
+                self._update_permanent_wait(wait_type, weighted_new)
+                return False, weighted_new
         else:
+            # FAILURE
             if retry_count < self.max_retries:
                 next_temp_wait = wait_time_used * self.retry_expansion
-                next_temp_wait = min(next_temp_wait, 5.0)
+                next_temp_wait = min(next_temp_wait, 15.0)
                 return True, next_temp_wait
             else:
                 self.logger.debug(f"Operation '{wait_type}' failed max retries. Timing unchanged.")
                 return False, current_permanent_wait
 
     def _update_permanent_wait(self, wait_type: str, new_val: float):
-        new_val = max(0.05, min(new_val, 3.0))
+        new_val = max(0.1, min(new_val, 10.0))
         self.default_waits[wait_type] = new_val
         
         if wait_type not in self.convergence_data:
@@ -176,7 +173,8 @@ class WaitOptimizer:
             self.convergence_data[wait_type]["baseline"] = new_val
             self.convergence_data[wait_type]["stable_count"] = 0
 
-    def wait(self, wait_type: str, min_wait: float = 0.05) -> float:
+    def static_wait(self, wait_type: str, min_wait: float = 0.05) -> float:
+        """Blind sleep wrapper using optimized timing (No validation)."""
         t = self.get_wait_time(wait_type, min_wait)
         time.sleep(t)
         return t
