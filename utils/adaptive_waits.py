@@ -63,8 +63,7 @@ class WaitOptimizer:
             "category_filter_switch": 0.15, 
             "worker_selection_feedback": 0.3,
             "worker_deselect_all": 0.5, 
-            "worker_confirmation_dialog": 1.0, 
-            "worker_change_animation": 1.5,
+            "worker_confirmation_dialog": 1.0,
             "worker_selection": 0.2,
             
             # --- OCR & Text ---

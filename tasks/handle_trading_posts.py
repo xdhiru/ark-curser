@@ -232,8 +232,6 @@ class TradingPost:
             s, r = click_template("tp-workers-confirm-button")
             if s:
                 wait_optimizer.wait("worker_confirmation_dialog")
-                click_template("tp-workers-shift-confirmation-prompt", max_retries=0)
-                wait_optimizer.wait("worker_change_animation")
             else:
                 return False, r
 
@@ -273,8 +271,6 @@ class TradingPost:
             s, r = click_template("tp-workers-confirm-button")
             if s:
                 wait_optimizer.wait("worker_confirmation_dialog")
-                click_template("tp-workers-shift-confirmation-prompt", max_retries=0)
-                wait_optimizer.wait("worker_change_animation")
             else:
                 return False, r
 
