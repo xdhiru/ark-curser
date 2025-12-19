@@ -1,32 +1,22 @@
 """
-Quick Screenshot
+Standalone Screenshot Tool.
 """
-import sys
-import cv2
 import yaml
+import subprocess
 from pathlib import Path
 
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
-
-from utils.adb import adb_screenshot
-
 def main():
-    # Load settings
-    with open(project_root / "config" / "settings.yaml", 'r') as f:
+    project_root = Path(__file__).resolve().parent
+    config_path = project_root / "config" / "settings.yaml"
+    
+    with open(config_path, 'r') as f:
         settings = yaml.safe_load(f)
-    
-    # Get path and create directory
-    path = Path(settings['screenshot_path'])
-    path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Capture and save
-    img = adb_screenshot()
-    if img is not None:
-        cv2.imwrite(str(path), img)
-        print(f"Screenshot saved: {path}")
-    else:
-        print("Failed to capture screenshot")
+    output_path = project_root / settings.get("screenshot_path", "Screenshots/screen.png")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    device_address=settings.get("device_ip", "127.0.0.1:5555")
+    with open(output_path, "wb") as f:
+        subprocess.run(["adb", "connect", device_address ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["adb", "-s", device_address, "exec-out", "screencap", "-p"], stdout=f, check=True)
 
 if __name__ == "__main__":
     main()
