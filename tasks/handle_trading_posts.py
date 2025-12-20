@@ -3,7 +3,7 @@ Trading post management with curse/uncurse scheduling.
 """
 
 import logging
-from tasks.navigation import reach_base, reach_base_left_side, is_inside_tp, find_trading_posts
+from tasks.navigation import reach_base, reach_base_left_side, is_inside_tp, find_trading_posts, validate_login_session
 from utils.ocr import read_text_from_image, read_timer_from_region, find_text_coordinates
 from utils.adb import adb_tap, get_cached_screenshot, swipe_right, slow_swipe_left
 from utils.logger import logger
@@ -19,7 +19,7 @@ from contextlib import contextmanager
 
 SCREEN_COORDS = get_config_value('screen_coordinates', {})
 TESTING = get_config_value('currently_testing', False)
-CURSE_EXECUTION_BUFFER = 2 if TESTING else get_config_value('curse_execution_buffer', 45)
+CURSE_EXECUTION_BUFFER = 2 if TESTING else get_config_value('curse_execution_buffer', 60)
 CURSE_CONFLICT_THRESHOLD = get_config_value('curse_conflict_threshold', 240)
 
 class WorkerConfig:
@@ -97,16 +97,15 @@ class TradingPost:
         for attempt in range(max_attempts):
             click_region(
                 (self.x-10, self.y-10, self.x+10, self.y+10), 
-                max_retries=1,
+                max_retries=0,
                 sleep_after=0,
-                timing_key="tp_building_tap" 
-            )
-            
+                description=f"TP{self.id}:tap tp from base"
+            )            
             success, retries = click_template(
                 "tp-entry-arrow", 
                 max_retries=2,
-                description=f"TP{self.id}:enter",
-                timing_key="tp_entry_dialog" 
+                description=f"TP{self.id}:tap tp-entry-arrow",
+                timing_key="tp_entry_dialog"
             )
             
             if success:
@@ -254,11 +253,18 @@ class TradingPost:
                 self.logger.info(f"CURSE (with drones) complete in {duration:.2f}s")
                 return self.uncurse()
             else:
-                if self._update_execution_time():
+                if self._collect_orders():
+                    self.logger.info("Order had already finished on assignment(Cursed too close). Uncursing...")
+                    duration = time.time() - start_time
+                    self.logger.info(f"CURSE complete in {duration:.2f}s")
+                    return self.uncurse()                                        
+                elif self._update_execution_time():
                     self._schedule_uncurse()
                     duration = time.time() - start_time
                     self.logger.info(f"CURSE complete in {duration:.2f}s")
                     return True, 0
+                else:
+                    self.logger.info("Unknown error during curse. Check debug logs.")
         return False, 0
 
     def uncurse(self) -> Tuple[bool, int]:
@@ -294,19 +300,36 @@ class TradingPost:
         return False, 0
 
     def _use_drones(self):
+        def is_tp_order_ready():
+            s = get_cached_screenshot(force_fresh=True)
+            return bool(find_template_in_image(s, "tp-order-ready-to-deliver"))
+
         if click_template("tp-use-drones-icon")[0]:
             click_template("tp-use-drones-max-icon", timing_key="drone_interface_load")
             click_template("tp-use-drones-confirm-button", timing_key="drone_interface_load")
-            static_wait("drone_animation")
+            adaptive_wait("drone_animation", is_tp_order_ready)
 
-    def _collect_orders(self):
-        if click_template("tp-order-ready-to-deliver", max_retries=1, timing_key="order_check")[0]:
+    def _collect_orders(self) -> bool:
+        """
+        Checks for order and collects it. 
+        Returns True if an order was actually collected.
+        """
+        success, _ = click_template(
+            "tp-order-ready-to-deliver", 
+            max_retries=1, 
+            timing_key="order_check"
+        )
+        
+        if success:
             static_wait("order_collection_animation")
+            return True
+        return False
 
     # --- Protocol ---
     @classmethod
     def initiate_cursing_protocol(cls):
         logger.info(f"Protocol Started: Buffer={CURSE_EXECUTION_BUFFER}s, Conflict Threshold={CURSE_CONFLICT_THRESHOLD}s")
+        last_successful_action_time = 0
         while True:
             try:
                 if not cls._curse_uncurse_queue:
@@ -327,13 +350,19 @@ class TradingPost:
                             logger.info(f"Conflict detected for TP {tp.id}, using drones.")
                             use_drones = True
                     
-                    reach_base_left_side()
                     if is_curse:
+                        if (now - last_successful_action_time) > CURSE_CONFLICT_THRESHOLD:
+                            validate_login_session()
+                        else:
+                            logger.info("Skipping login validation (Active session detected)")
+                        reach_base_left_side()
                         tp.curse(use_drones)
                     else:
+                        reach_base_left_side()
                         wait = max(0, task_time - time.time())
                         if wait > 0: time.sleep(wait)
                         tp.uncurse()
+                    last_successful_action_time = time.time()
                 else:
                     sleep_time = task_time - now - CURSE_EXECUTION_BUFFER
                     if sleep_time > 0:
@@ -343,6 +372,14 @@ class TradingPost:
                         time.sleep(sleep_time)
             except Exception as e:
                 logger.error(f"Protocol Error: {e}", exc_info=True)
+                last_successful_action_time = 0
+                try:
+                    logger.info("Attempting session recovery...")
+                    if validate_login_session():
+                        logger.info("Session recovered. Resuming protocol immediately.")
+                        continue 
+                except Exception as recovery_error:
+                    logger.error(f"Recovery failed: {recovery_error}")
                 time.sleep(60)
 
 def handle_trading_posts():

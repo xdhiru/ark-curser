@@ -11,7 +11,7 @@ use_gpu: false
 # Fine-tunable static Values 
 
 # TP Interaction Delays (in seconds)
-curse_execution_buffer: 45
+curse_execution_buffer: 60
 curse_conflict_threshold: 240
 
 # Logs auto-deletion
