@@ -49,7 +49,7 @@ class WaitOptimizer:
         """Define the initial pessimistic wait times."""
         return {
             # --- Navigation & Base ---
-            "base_transition": 5.0, 
+            "base_transition": 2.5, 
             "base_overview_load": 0.5, 
             "base_left_side_position": 0.5,
             
@@ -82,6 +82,13 @@ class WaitOptimizer:
             "retry_delay": 0.5, 
             "screen_transition": 0.5,
             "pre_template_search": 0.5,
+
+            # --- Login & Session ---
+            "inbox_open_click": 0.5,
+            "server_check_delay": 2,
+            "session_error_confirm_click": 1.0,
+            "login_start_click": 5.0,
+            "login_sequence": 11.0,
             
             # --- Post-Action Delays ---
             "post_click_wait": 0.3,

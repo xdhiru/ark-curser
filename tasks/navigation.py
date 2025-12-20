@@ -11,40 +11,9 @@ from utils.logger import logger
 from typing import Optional, List, Dict, Callable, Union, Tuple
 import time
 
-def find_and_click_text(
-    text: str, 
-    confidence_threshold: float = 0.6,
-    max_retries: int = None
-) -> Tuple[bool, int]:
-    if max_retries is None:
-        max_retries = wait_optimizer.max_retries
-    
-    for retry_count in range(max_retries + 1):
-        wait_time = wait_optimizer.get_wait_time("text_find")
-        time.sleep(wait_time)
-        
-        coords = find_text_coordinates(text, confidence_threshold)
-        
-        success = False
-        if coords:
-            success = adb_tap(coords[0][0], coords[0][1])
-            
-        should_retry, next_wait = wait_optimizer.record_wait_result(
-            "text_find", wait_time, success, retry_count
-        )
-        
-        if success:
-            static_wait("post_click_wait")
-            return True, retry_count
-        
-        if not should_retry or retry_count >= max_retries:
-            break
-            
-        extra_wait = next_wait - wait_time
-        if extra_wait > 0:
-            time.sleep(extra_wait)
-    
-    return False, max_retries
+# ==============================================================================
+# 1. State Checks
+# ==============================================================================
 
 def is_home_screen() -> bool:
     """Check if currently on home screen."""
@@ -69,6 +38,75 @@ def is_base_overview_open() -> bool:
     screenshot = get_cached_screenshot(force_fresh=True)
     if screenshot is None: return False
     return bool(find_template_in_image(screenshot, "trading-post-icon-small"))
+
+# ==============================================================================
+# 2. Login & Session Management
+# ==============================================================================
+
+def is_login_expired() -> bool:
+    """Check for login-expired-prompt in current screen."""
+    screenshot = get_cached_screenshot(force_fresh=True)
+    if screenshot is None: return False
+    return bool(find_template_in_image(screenshot, "login-expired-prompt"))
+
+def open_inbox() -> bool:
+    """Opens inbox from home screen."""
+    if not reach_home_screen(): return False
+
+    success, _ = click_template(
+        "home-screen-inbox-icon",
+        timing_key="inbox_open_click",
+        wait_after=False
+    )
+
+    static_wait("server_check_delay")
+    return success
+
+def perform_login() -> bool:
+    """
+    Universal login handler.
+    Supports both:
+    1. Re-login (Session Expired popup -> Confirm -> Start)
+    2. Fresh Login (Title Screen -> Start)
+    """
+    logger.info("Performing login sequence...")
+
+    click_template(
+        "login-expired-prompt-confirmation", 
+        timing_key="session_error_confirm_click",
+        max_retries=1
+    )
+
+    if not click_template("login-start-button", timing_key="login_start_click")[0]:
+        logger.error("Failed to find Login Start button. Cannot proceed.")
+        return False
+
+    logger.info("Waiting for home screen...")
+    if adaptive_wait("login_sequence", is_home_screen, timeout=60):
+        logger.info("Login successful")
+        return True
+    
+    logger.error("Login timeout - Home screen never appeared.")
+    return False
+
+def validate_login_session() -> bool:
+    """
+    Orchestrator: Checks session, relogins if needed, cleans up UI.
+    """
+    logger.debug("Validating login session...")
+    
+    if not open_inbox():
+        return perform_login()
+
+    if is_login_expired():
+        return perform_login()
+    else:
+        logger.debug("Session is valid. Closing inbox.")
+        return click_template("back-icon-2", description="close_inbox", wait_after=True)[0]
+
+# ==============================================================================
+# 3. Core Navigation
+# ==============================================================================
 
 def reach_home_screen(max_attempts: int = 15) -> bool:
     logger.debug("Navigating to home screen")
@@ -142,6 +180,34 @@ def reach_base_left_side() -> bool:
     static_wait("base_left_side_position")
     return True
 
+def enter_base_overview() -> bool:
+    if not reach_base(): return False
+    
+    success, _ = click_template("base-overview-icon", threshold=0.8, wait_after=False)
+    
+    if success:
+        if adaptive_wait("base_overview_load", is_base_overview_open):
+            return True
+    return False
+
+def ensure_at_location(
+    check_func: Callable[[], bool],
+    navigate_func: Callable[[], bool],
+    location: str = "target location"
+) -> bool:
+    if check_func():
+        return True
+    
+    logger.info(f"Navigating to {location}...")
+    success = navigate_func()
+    if success:
+        static_wait("post_navigation")
+    return success
+
+# ==============================================================================
+# 4. Vision & Interaction
+# ==============================================================================
+
 def find_trading_posts() -> List[Dict]:
     logger.debug("Searching for trading posts")
     
@@ -167,15 +233,41 @@ def find_factories() -> List[Dict]:
         return matches
         
     return []
-def enter_base_overview() -> bool:
-    if not reach_base(): return False
+
+def find_and_click_text(
+    text: str, 
+    confidence_threshold: float = 0.6,
+    max_retries: int = None
+) -> Tuple[bool, int]:
+    if max_retries is None:
+        max_retries = wait_optimizer.max_retries
     
-    success, _ = click_template("base-overview-icon", threshold=0.8, wait_after=False)
+    for retry_count in range(max_retries + 1):
+        wait_time = wait_optimizer.get_wait_time("text_find")
+        time.sleep(wait_time)
+        
+        coords = find_text_coordinates(text, confidence_threshold)
+        
+        success = False
+        if coords:
+            success = adb_tap(coords[0][0], coords[0][1])
+            
+        should_retry, next_wait = wait_optimizer.record_wait_result(
+            "text_find", wait_time, success, retry_count
+        )
+        
+        if success:
+            static_wait("post_click_wait")
+            return True, retry_count
+        
+        if not should_retry or retry_count >= max_retries:
+            break
+            
+        extra_wait = next_wait - wait_time
+        if extra_wait > 0:
+            time.sleep(extra_wait)
     
-    if success:
-        if adaptive_wait("base_overview_load", is_base_overview_open):
-            return True
-    return False
+    return False, max_retries
 
 def wait_for_template(
     template_name: str,
@@ -210,6 +302,10 @@ def wait_for_template(
     logger.warning(f"Template '{template_name}' not found after {timeout}s")
     return None
 
+# ==============================================================================
+# 5. Utilities
+# ==============================================================================
+
 def retry_operation(
     func: Callable[[], bool],
     max_attempts: int = 3,
@@ -222,17 +318,3 @@ def retry_operation(
         if attempt < max_attempts:
             static_wait(delay_type)
     return False
-
-def ensure_at_location(
-    check_func: Callable[[], bool],
-    navigate_func: Callable[[], bool],
-    location: str = "target location"
-) -> bool:
-    if check_func():
-        return True
-    
-    logger.info(f"Navigating to {location}...")
-    success = navigate_func()
-    if success:
-        static_wait("post_navigation")
-    return success
