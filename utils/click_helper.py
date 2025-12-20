@@ -49,7 +49,8 @@ def _execute_action(
     action_name: str,
     action_fn: Callable[[], bool],
     max_retries: int = None,
-    description: str = "action"
+    description: str = "action",
+    learn: bool = True
 ) -> Tuple[bool, int]:
     """Generic retry engine."""
     if max_retries is None:
@@ -61,10 +62,13 @@ def _execute_action(
         
         success = action_fn()
         
-        should_retry, next_wait = wait_optimizer.record_wait_result(
-            action_name, wait_time, success, retry_count
-        )
-        
+        if learn:
+            should_retry, next_wait = wait_optimizer.record_wait_result(
+                action_name, wait_time, success, retry_count
+            )
+        else:
+            should_retry = not success
+            next_wait = wait_time
         if success:
             return True, retry_count
             
@@ -84,7 +88,8 @@ def click_template(
     max_retries: int = None,
     wait_after: bool = True,
     description: str = None,
-    timing_key: str = "template_click"
+    timing_key: str = "template_click",
+    learn: bool = True
 ) -> Tuple[bool, int]:
     """Find template and click it with smart retry system."""
 
@@ -116,7 +121,7 @@ def click_template(
         return False
 
     # 3. Execution
-    success, retries = _execute_action(timing_key, attempt_click, max_retries, description)
+    success, retries = _execute_action(timing_key, attempt_click, max_retries, description, learn=learn)
     
     if success and wait_after:
         static_wait("post_click_wait")
