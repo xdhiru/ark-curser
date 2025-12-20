@@ -23,12 +23,10 @@ def adaptive_wait(
     initial_wait = wait_optimizer.get_wait_time(wait_type)
     time.sleep(initial_wait)
 
-    # 1. Immediate Check (Optimization chance)
     if validator_func():
         wait_optimizer.record_wait_result(wait_type, initial_wait, True, retry_count=0)
         return True
 
-    # 2. Retry Loop (Correction chance)
     elapsed = initial_wait
     retries = 0
     start_time = time.time()
@@ -129,7 +127,8 @@ def click_region(
     region: tuple, 
     max_retries: int = None,
     sleep_after: float = None,
-    timing_key: str = "region_click"
+    timing_key: str = "region_click",
+    description: str = None
 ) -> Tuple[bool, int]:
     """Click at the center of a region with retry."""
     if len(region) != 4:
@@ -142,7 +141,8 @@ def click_region(
     def attempt_click():
         return adb_tap(center_x, center_y)
 
-    success, retries = _execute_action(timing_key, attempt_click, max_retries, f"region {region}")
+    desc = description if description else f"region {region}"
+    success, retries = _execute_action(timing_key, attempt_click, max_retries, desc)
     
     if success:
         if sleep_after is not None:
