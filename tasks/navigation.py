@@ -73,7 +73,7 @@ def perform_login() -> bool:
 
     click_template(
         "login-expired-prompt-confirmation", 
-        timing_key="session_error_confirm_click",
+        timing_key="error_confirm_click",
         max_retries=1
     )
 
@@ -116,14 +116,18 @@ def reach_home_screen(max_attempts: int = 15) -> bool:
             return True
         
         success, _ = click_template(
-            "back-icon", 
+            "back-icon",
             wait_after=False,
             description="reach_home:back",
-            timing_key="screen_transition"
+            timing_key="nav_back_click",
+            max_retries=0,
+            learn=False
         )
         
         if success:
             static_wait("screen_transition")
+        else:
+            static_wait("retry_delay") 
     
     logger.warning(f"Failed to reach home screen after {max_attempts} attempts")
     return False
@@ -144,7 +148,6 @@ def reach_base(max_back_attempts: int = 15) -> bool:
             )
             
             if success:
-                # Validating arrival
                 if adaptive_wait("base_transition", is_base):
                     return True
         

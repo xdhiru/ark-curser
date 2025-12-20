@@ -49,15 +49,15 @@ class WaitOptimizer:
         """Define the initial pessimistic wait times."""
         return {
             # --- Navigation & Base ---
+            "nav_back_click": 0.5,
             "base_transition": 2.5, 
             "base_overview_load": 0.5, 
             "base_left_side_position": 0.5,
             
             # --- Trading Post Interactions ---
-            "tp_building_tap": 0.5,
-            "tp_entry_dialog": 1.0, 
-            "tp_interior_load": 0.5, 
-            "tp_workers_section_load": 1.0,
+            "tp_entry_dialog": 0.35, 
+            "tp_interior_load": 0.2, 
+            "tp_workers_section_load": 0.3,
             "pre_workers_click": 0.5,
             
             # --- Worker Management ---
@@ -65,30 +65,30 @@ class WaitOptimizer:
             "category_filter_switch": 0.15, 
             "worker_selection_feedback": 0.3,
             "worker_deselect_all": 0.5, 
-            "worker_confirmation_dialog": 1.0,
+            "worker_confirmation_dialog": 0.75,
             
             # --- Drones & Orders ---
-            "drone_interface_load": 0.5, 
+            "drone_interface_load": 0.25, 
             "drone_animation": 1.5,
-            "order_collection_animation": 1.5, 
+            "order_collection_animation": 1.0, 
             "order_check": 0.5,
             
             # --- Low Level Operations ---
             "swipe_completion": 0.2, 
             "slow_swipe_completion": 0.2,
             "template_check_interval": 0.5, 
-            "template_click": 0.5, 
-            "region_click": 0.5,
+            "template_click": 0.2, 
+            "region_click": 0.25,
             "retry_delay": 0.5, 
-            "screen_transition": 0.5,
+            "screen_transition": 0.35,
             "pre_template_search": 0.5,
 
             # --- Login & Session ---
-            "inbox_open_click": 0.5,
-            "server_check_delay": 2,
-            "session_error_confirm_click": 1.0,
-            "login_start_click": 5.0,
-            "login_sequence": 11.0,
+            "inbox_open_click": 0.3,
+            "server_check_delay": 2.5,
+            "error_confirm_click": 1.0,
+            "login_start_click": 7.0,
+            "login_sequence": 11.5,
             
             # --- Post-Action Delays ---
             "post_click_wait": 0.3,
