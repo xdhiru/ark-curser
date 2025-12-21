@@ -50,7 +50,7 @@ class WaitOptimizer:
         return {
             # --- Navigation & Base ---
             "nav_back_click": 0.5,
-            "base_transition": 2.5, 
+            "base_transition": 3.0, 
             "base_overview_load": 0.5, 
             "base_left_side_position": 0.5,
             
